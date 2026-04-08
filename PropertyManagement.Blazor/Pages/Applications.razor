@@ -1,0 +1,328 @@
+@page "/applications"
+@attribute [Authorize]
+@inject PropertyManagementApiClient ApiClient
+
+<PageTitle>Applications</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Applications</h1>
+        <p class="page-intro">Review public leasing applications, update status, and keep the intake queue moving inside the admin panel.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+<div class="dashboard-grid">
+    <section class="stat-card compact-card">
+        <span class="stat-label">Applications</span>
+        <strong>@applications.Count</strong>
+    </section>
+    <section class="stat-card compact-card">
+        <span class="stat-label">New</span>
+        <strong>@applications.Count(item => item.Status == "New")</strong>
+    </section>
+    <section class="stat-card compact-card">
+        <span class="stat-label">Reviewing</span>
+        <strong>@applications.Count(item => item.Status == "Reviewing")</strong>
+    </section>
+    <section class="stat-card compact-card">
+        <span class="stat-label">Approved</span>
+        <strong>@applications.Count(item => item.Status == "Approved")</strong>
+    </section>
+</div>
+
+<div class="glass-panel">
+    <div class="filter-row">
+        <div>
+            <label class="form-label">Filter by status</label>
+            <InputSelect class="form-select" @bind-Value="selectedStatus" @bind-Value:after="ApplyFiltersAsync">
+                <option value="">All statuses</option>
+                @foreach (var status in statuses)
+                {
+                    <option value="@status">@status</option>
+                }
+            </InputSelect>
+        </div>
+        <div>
+            <label class="form-label">Filter by property</label>
+            <InputSelect TValue="int?" class="form-select" @bind-Value="selectedPropertyId" @bind-Value:after="ApplyFiltersAsync">
+                <option value="">All properties</option>
+                @foreach (var property in properties)
+                {
+                    <option value="@property.PropertyId">@property.DisplayLabel</option>
+                }
+            </InputSelect>
+        </div>
+    </div>
+</div>
+
+<div class="workspace-grid">
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>@(editingApplicationId is null ? "Review application" : "Edit application")</h3>
+                <p class="page-intro">Update the intake status or correct applicant details before follow-up.</p>
+            </div>
+        </div>
+
+        <EditForm class="record-form" Model="form" OnValidSubmit="SaveApplicationAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label class="form-label">Property</label>
+                <InputSelect class="form-select" @bind-Value="form.PropertyId">
+                    <option value="0">Select a property</option>
+                    @foreach (var property in properties)
+                    {
+                        <option value="@property.PropertyId">@property.FullAddressLabel</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="compact-grid">
+                <div class="mb-3">
+                    <label class="form-label">First name</label>
+                    <InputText class="form-control" @bind-Value="form.ApplicantFirstName" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Last name</label>
+                    <InputText class="form-control" @bind-Value="form.ApplicantLastName" />
+                </div>
+            </div>
+
+            <div class="compact-grid">
+                <div class="mb-3">
+                    <label class="form-label">Email</label>
+                    <InputText class="form-control" @bind-Value="form.Email" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Phone</label>
+                    <InputText class="form-control" @bind-Value="form.PhoneNumber" />
+                </div>
+            </div>
+
+            <div class="compact-grid">
+                <div class="mb-3">
+                    <label class="form-label">Preferred move-in</label>
+                    <InputDate class="form-control" @bind-Value="form.PreferredMoveInDate" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Household size</label>
+                    <InputNumber class="form-control" @bind-Value="form.HouseholdSize" />
+                </div>
+            </div>
+
+            <div class="compact-grid">
+                <div class="mb-3">
+                    <label class="form-label">Monthly income</label>
+                    <InputNumber class="form-control" @bind-Value="form.MonthlyIncome" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Status</label>
+                    <InputSelect class="form-select" @bind-Value="form.Status">
+                        @foreach (var status in statuses)
+                        {
+                            <option value="@status">@status</option>
+                        }
+                    </InputSelect>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Employer</label>
+                <InputText class="form-control" @bind-Value="form.CurrentEmployer" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Pets</label>
+                <InputText class="form-control" @bind-Value="form.PetsDescription" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Notes</label>
+                <InputTextArea class="form-control" rows="4" @bind-Value="form.Notes" />
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit" disabled="@isSaving">@(isSaving ? "Saving..." : "Save application")</button>
+                <button class="btn btn-outline-primary" type="button" @onclick="ResetForm">Clear</button>
+            </div>
+        </EditForm>
+    </section>
+
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>Incoming queue</h3>
+                <p class="page-intro">Public website leads land here so admins can review and respond.</p>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <p>Loading applications...</p>
+        }
+        else if (applications.Count == 0)
+        {
+            <p>No applications match the current filters.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Applicant</th>
+                            <th>Property</th>
+                            <th>Status</th>
+                            <th>Move-in</th>
+                            <th>Submitted</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var application in applications)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@application.ApplicantName</strong>
+                                    <div class="mini-note">@application.Email</div>
+                                </td>
+                                <td>@application.PropertyLabel</td>
+                                <td><span class="@application.StatusCssClass">@application.Status</span></td>
+                                <td>@application.PreferredMoveInDate.ToString("yyyy-MM-dd")</td>
+                                <td>@application.SubmittedAt.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                <td class="action-cell">
+                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEdit(application)">Open</button>
+                                    <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteApplicationAsync(application.ApplicationId)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private static readonly string[] statuses = ["New", "Reviewing", "Approved", "Declined"];
+
+    private List<PropertyApplicationModel> applications = [];
+    private List<PropertyOption> properties = [];
+    private PropertyApplicationFormModel form = new();
+    private bool isLoading = true;
+    private bool isSaving;
+    private int? editingApplicationId;
+    private string? errorMessage;
+    private string? selectedStatus;
+    private int? selectedPropertyId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupsAsync();
+        await LoadApplicationsAsync();
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        try
+        {
+            properties = await ApiClient.GetPropertiesAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        await LoadApplicationsAsync();
+    }
+
+    private async Task LoadApplicationsAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            applications = await ApiClient.GetPropertyApplicationsAsync(selectedStatus, selectedPropertyId);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveApplicationAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        try
+        {
+            if (editingApplicationId is int applicationId)
+            {
+                await ApiClient.UpdatePropertyApplicationAsync(applicationId, form);
+            }
+            else
+            {
+                await ApiClient.CreatePropertyApplicationAsync(form);
+            }
+
+            await LoadApplicationsAsync();
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void BeginEdit(PropertyApplicationModel application)
+    {
+        editingApplicationId = application.ApplicationId;
+        form = PropertyApplicationFormModel.FromApplication(application);
+        errorMessage = null;
+    }
+
+    private async Task DeleteApplicationAsync(int applicationId)
+    {
+        try
+        {
+            await ApiClient.DeletePropertyApplicationAsync(applicationId);
+            await LoadApplicationsAsync();
+
+            if (editingApplicationId == applicationId)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void ResetForm()
+    {
+        form = new PropertyApplicationFormModel();
+        editingApplicationId = null;
+        errorMessage = null;
+    }
+}

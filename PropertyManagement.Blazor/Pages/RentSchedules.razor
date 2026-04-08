@@ -1,0 +1,251 @@
+@page "/rent-schedules"
+@attribute [Authorize]
+@inject PropertyManagementApiClient ApiClient
+
+<PageTitle>Rent Schedules</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Rent Schedules</h1>
+        <p class="page-intro">Manage due dates, statuses, rent totals, and reminder counts for each tenant.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+<div class="workspace-grid">
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>@(editingScheduleId is null ? "Add rent schedule" : "Edit rent schedule")</h3>
+                <p class="page-intro">Each schedule must be linked to an existing tenant.</p>
+            </div>
+        </div>
+
+        <EditForm class="record-form" Model="form" OnValidSubmit="SaveScheduleAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label class="form-label">Tenant</label>
+                <InputSelect class="form-select" @bind-Value="form.TenantId">
+                    <option value="0">Select a tenant</option>
+                    @foreach (var tenant in tenants)
+                    {
+                        <option value="@tenant.TenantId">@tenant.FullName</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => form.TenantId" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Due date</label>
+                <InputDate class="form-control" @bind-Value="form.DueDate" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Status</label>
+                <InputSelect class="form-select" @bind-Value="form.Status">
+                    @foreach (var status in statuses)
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Base rent</label>
+                <InputNumber class="form-control" @bind-Value="form.BaseRent" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Late fee accrued</label>
+                <InputNumber class="form-control" @bind-Value="form.LateFeeAccrued" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Reminder count</label>
+                <InputNumber class="form-control" @bind-Value="form.ReminderCount" />
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit" disabled="@isSaving">@(isSaving ? "Saving..." : "Save schedule")</button>
+                <button class="btn btn-outline-primary" type="button" @onclick="ResetForm">Clear</button>
+            </div>
+        </EditForm>
+    </section>
+
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>Schedule records</h3>
+                <p class="page-intro">Includes total due, total paid, and status highlighting.</p>
+            </div>
+        </div>
+
+        <div class="filter-row mb-3">
+            <div>
+                <label class="form-label">Status filter</label>
+                <InputSelect class="form-select" @bind-Value="selectedStatus">
+                    <option value="">All</option>
+                    @foreach (var status in statuses)
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </InputSelect>
+            </div>
+            <button class="btn btn-outline-primary" type="button" @onclick="ApplyFilterAsync">Apply</button>
+        </div>
+
+        @if (isLoading)
+        {
+            <p>Loading schedules...</p>
+        }
+        else if (schedules.Count == 0)
+        {
+            <p>No rent schedules found for the current filter.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Tenant</th>
+                            <th>Due date</th>
+                            <th>Status</th>
+                            <th>Total due</th>
+                            <th>Total paid</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var schedule in schedules)
+                        {
+                            <tr>
+                                <td>@schedule.TenantName</td>
+                                <td>@schedule.DueDate.ToString("yyyy-MM-dd")</td>
+                                <td><span class="@schedule.StatusCssClass">@schedule.Status</span></td>
+                                <td>@schedule.TotalDue.ToString("C")</td>
+                                <td>@schedule.TotalPaid.ToString("C")</td>
+                                <td class="action-cell">
+                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEdit(schedule)">Edit</button>
+                                    <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteScheduleAsync(schedule.ScheduleId)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private static readonly string[] statuses = ["Unpaid", "Paid", "Late", "Partial"];
+
+    private List<TenantModel> tenants = [];
+    private List<RentScheduleModel> schedules = [];
+    private RentScheduleFormModel form = new();
+    private bool isLoading = true;
+    private bool isSaving;
+    private int? editingScheduleId;
+    private string selectedStatus = string.Empty;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var tenantsTask = ApiClient.GetTenantsAsync();
+            var schedulesTask = ApiClient.GetRentSchedulesAsync(selectedStatus);
+
+            await Task.WhenAll(tenantsTask, schedulesTask);
+
+            tenants = tenantsTask.Result;
+            schedules = schedulesTask.Result;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private Task ApplyFilterAsync() => LoadAsync();
+
+    private async Task SaveScheduleAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        try
+        {
+            if (editingScheduleId is int scheduleId)
+            {
+                await ApiClient.UpdateRentScheduleAsync(scheduleId, form);
+            }
+            else
+            {
+                await ApiClient.CreateRentScheduleAsync(form);
+            }
+
+            await LoadAsync();
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void BeginEdit(RentScheduleModel schedule)
+    {
+        editingScheduleId = schedule.ScheduleId;
+        form = RentScheduleFormModel.FromSchedule(schedule);
+        errorMessage = null;
+    }
+
+    private async Task DeleteScheduleAsync(int scheduleId)
+    {
+        try
+        {
+            await ApiClient.DeleteRentScheduleAsync(scheduleId);
+            await LoadAsync();
+
+            if (editingScheduleId == scheduleId)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void ResetForm()
+    {
+        form = new RentScheduleFormModel();
+        editingScheduleId = null;
+        errorMessage = null;
+    }
+}

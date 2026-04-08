@@ -1,0 +1,229 @@
+@page "/rent-payments"
+@attribute [Authorize]
+@inject PropertyManagementApiClient ApiClient
+
+<PageTitle>Rent Payments</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Rent Payments</h1>
+        <p class="page-intro">Track payments against rent schedules with payment method and reference details.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+<div class="workspace-grid">
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>@(editingPaymentId is null ? "Add payment" : "Edit payment")</h3>
+                <p class="page-intro">Select a linked rent schedule instead of entering raw IDs.</p>
+            </div>
+        </div>
+
+        <EditForm class="record-form" Model="form" OnValidSubmit="SavePaymentAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label class="form-label">Rent schedule</label>
+                <InputSelect class="form-select" @bind-Value="form.ScheduleId">
+                    <option value="0">Select a schedule</option>
+                    @foreach (var schedule in schedules)
+                    {
+                        <option value="@schedule.ScheduleId">@schedule.SummaryLabel</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => form.ScheduleId" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Payment date</label>
+                <InputDate class="form-control" @bind-Value="form.PaymentDate" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Amount paid</label>
+                <InputNumber class="form-control" @bind-Value="form.AmountPaid" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Payment method</label>
+                <InputSelect class="form-select" @bind-Value="form.PaymentMethod">
+                    @foreach (var method in paymentMethods)
+                    {
+                        <option value="@method">@method</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Transaction reference</label>
+                <InputText class="form-control" @bind-Value="form.TransactionRef" />
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit" disabled="@isSaving">@(isSaving ? "Saving..." : "Save payment")</button>
+                <button class="btn btn-outline-primary" type="button" @onclick="ResetForm">Clear</button>
+            </div>
+        </EditForm>
+    </section>
+
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>Payment records</h3>
+                <p class="page-intro">Review each payment against its linked tenant and schedule.</p>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <p>Loading payments...</p>
+        }
+        else if (payments.Count == 0)
+        {
+            <p>No rent payments found yet.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Tenant</th>
+                            <th>Schedule</th>
+                            <th>Amount</th>
+                            <th>Method</th>
+                            <th>Date</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var payment in payments)
+                        {
+                            <tr>
+                                <td>@payment.TenantName</td>
+                                <td>@payment.ScheduleLabel</td>
+                                <td>@payment.AmountPaid.ToString("C")</td>
+                                <td>@payment.PaymentMethod</td>
+                                <td>@payment.PaymentDate.ToString("yyyy-MM-dd")</td>
+                                <td class="action-cell">
+                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEdit(payment)">Edit</button>
+                                    <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeletePaymentAsync(payment.PaymentId)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private static readonly string[] paymentMethods = ["ACH", "Card", "Cash", "Check"];
+
+    private List<RentScheduleModel> schedules = [];
+    private List<RentPayment> payments = [];
+    private RentPaymentFormModel form = new();
+    private bool isLoading = true;
+    private bool isSaving;
+    private int? editingPaymentId;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var schedulesTask = ApiClient.GetRentSchedulesAsync();
+            var paymentsTask = ApiClient.GetRentPaymentsAsync();
+
+            await Task.WhenAll(schedulesTask, paymentsTask);
+
+            schedules = schedulesTask.Result;
+            payments = paymentsTask.Result;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SavePaymentAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        try
+        {
+            if (editingPaymentId is int paymentId)
+            {
+                await ApiClient.UpdateRentPaymentAsync(paymentId, form);
+            }
+            else
+            {
+                await ApiClient.CreateRentPaymentAsync(form);
+            }
+
+            await LoadAsync();
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void BeginEdit(RentPayment payment)
+    {
+        editingPaymentId = payment.PaymentId;
+        form = RentPaymentFormModel.FromPayment(payment);
+        errorMessage = null;
+    }
+
+    private async Task DeletePaymentAsync(int paymentId)
+    {
+        try
+        {
+            await ApiClient.DeleteRentPaymentAsync(paymentId);
+            await LoadAsync();
+
+            if (editingPaymentId == paymentId)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void ResetForm()
+    {
+        form = new RentPaymentFormModel();
+        editingPaymentId = null;
+        errorMessage = null;
+    }
+}

@@ -1,0 +1,242 @@
+@page "/rent-records"
+@attribute [Authorize]
+@inject PropertyManagementApiClient ApiClient
+
+<PageTitle>Rent Records</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Rent records</h1>
+        <p class="page-intro">Review tenant ledgers and property-level rollups for disputes, accounting checks, and admin follow-up.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+<div class="workspace-grid">
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>Tenant ledger</h3>
+                <p class="page-intro">Running balance by charge and payment event.</p>
+            </div>
+        </div>
+
+        <div class="compact-grid">
+            <div>
+                <label class="form-label">Tenant</label>
+                <InputSelect class="form-select" @bind-Value="selectedTenantId">
+                    @foreach (var tenant in tenants)
+                    {
+                        <option value="@tenant.TenantId">@tenant.FullName</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="align-end">
+                <button class="btn btn-outline-primary" type="button" @onclick="LoadTenantLedgerAsync">Load ledger</button>
+            </div>
+        </div>
+
+        @if (tenantLedger is null)
+        {
+            <p class="mt-3">Choose a tenant to load the ledger.</p>
+        }
+        else
+        {
+            <div class="metric-strip">
+                <div class="metric-chip">
+                    <span>Tenant</span>
+                    <strong>@tenantLedger.TenantName</strong>
+                </div>
+                <div class="metric-chip">
+                    <span>Property</span>
+                    <strong>@tenantLedger.PropertyName</strong>
+                </div>
+                <div class="metric-chip">
+                    <span>Current balance</span>
+                    <strong>@tenantLedger.CurrentBalance.ToString("C")</strong>
+                </div>
+            </div>
+
+            <div class="table-responsive mt-3">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                            <th>Charge</th>
+                            <th>Payment</th>
+                            <th>Running balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in tenantLedger.Entries)
+                        {
+                            <tr>
+                                <td>@entry.EntryDate.ToString("yyyy-MM-dd")</td>
+                                <td>@entry.EntryType</td>
+                                <td>@entry.Description</td>
+                                <td>@(entry.ChargeAmount == 0 ? "-" : entry.ChargeAmount.ToString("C"))</td>
+                                <td>@(entry.PaymentAmount == 0 ? "-" : entry.PaymentAmount.ToString("C"))</td>
+                                <td>@entry.RunningBalance.ToString("C")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>Property ledger</h3>
+                <p class="page-intro">Rollup of charges, collections, maintenance costs, and net income.</p>
+            </div>
+        </div>
+
+        <div class="compact-grid">
+            <div>
+                <label class="form-label">Property</label>
+                <InputSelect class="form-select" @bind-Value="selectedPropertyId">
+                    @foreach (var property in properties)
+                    {
+                        <option value="@property.PropertyId">@property.DisplayLabel</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="align-end">
+                <button class="btn btn-outline-primary" type="button" @onclick="LoadPropertyLedgerAsync">Load summary</button>
+            </div>
+        </div>
+
+        @if (propertyLedger is null)
+        {
+            <p class="mt-3">Choose a property to load the summary.</p>
+        }
+        else
+        {
+            <div class="dashboard-grid mt-3">
+                <section class="stat-card compact-card">
+                    <span class="stat-label">Charged</span>
+                    <strong>@propertyLedger.TotalRentCharged.ToString("C0")</strong>
+                </section>
+                <section class="stat-card compact-card">
+                    <span class="stat-label">Collected</span>
+                    <strong>@propertyLedger.TotalCollected.ToString("C0")</strong>
+                </section>
+                <section class="stat-card compact-card">
+                    <span class="stat-label">Outstanding</span>
+                    <strong>@propertyLedger.OutstandingBalance.ToString("C0")</strong>
+                </section>
+                <section class="stat-card compact-card">
+                    <span class="stat-label">Net income</span>
+                    <strong>@propertyLedger.NetIncome.ToString("C0")</strong>
+                </section>
+            </div>
+
+            <div class="table-responsive mt-3">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Tenant</th>
+                            <th>Charges</th>
+                            <th>Collected</th>
+                            <th>Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var balance in propertyLedger.TenantBalances)
+                        {
+                            <tr>
+                                <td>@balance.TenantName</td>
+                                <td>@balance.Charges.ToString("C")</td>
+                                <td>@balance.Collected.ToString("C")</td>
+                                <td>@balance.OutstandingBalance.ToString("C")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private List<TenantModel> tenants = [];
+    private List<PropertyOption> properties = [];
+    private TenantLedgerModel? tenantLedger;
+    private PropertyLedgerModel? propertyLedger;
+    private int selectedTenantId;
+    private int selectedPropertyId;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var tenantsTask = ApiClient.GetTenantsAsync();
+            var propertiesTask = ApiClient.GetPropertiesAsync();
+            await Task.WhenAll(tenantsTask, propertiesTask);
+
+            tenants = tenantsTask.Result;
+            properties = propertiesTask.Result;
+
+            if (tenants.Count > 0)
+            {
+                selectedTenantId = tenants[0].TenantId;
+                await LoadTenantLedgerAsync();
+            }
+
+            if (properties.Count > 0)
+            {
+                selectedPropertyId = properties[0].PropertyId;
+                await LoadPropertyLedgerAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task LoadTenantLedgerAsync()
+    {
+        if (selectedTenantId == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            tenantLedger = await ApiClient.GetTenantLedgerAsync(selectedTenantId);
+            errorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task LoadPropertyLedgerAsync()
+    {
+        if (selectedPropertyId == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            propertyLedger = await ApiClient.GetPropertyLedgerAsync(selectedPropertyId);
+            errorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+}

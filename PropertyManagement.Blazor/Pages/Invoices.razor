@@ -1,0 +1,279 @@
+@page "/invoices"
+@attribute [Authorize]
+@inject PropertyManagementApiClient ApiClient
+
+<PageTitle>Invoices</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Invoices</h1>
+        <p class="page-intro">Manage billing for maintenance work and rent-related charges from one clean admin page.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+<div class="dashboard-grid">
+    <section class="stat-card compact-card">
+        <span class="stat-label">Total invoiced</span>
+        <strong>@invoices.Sum(item => item.TotalAmount).ToString("C0")</strong>
+    </section>
+    <section class="stat-card compact-card">
+        <span class="stat-label">Outstanding</span>
+        <strong>@invoices.Where(item => item.Status is "Draft" or "Sent" or "Overdue").Sum(item => item.TotalAmount).ToString("C0")</strong>
+    </section>
+    <section class="stat-card compact-card">
+        <span class="stat-label">Overdue count</span>
+        <strong>@invoices.Count(item => item.Status == "Overdue")</strong>
+    </section>
+    <section class="stat-card compact-card">
+        <span class="stat-label">Exported</span>
+        <strong>@invoices.Count(item => item.IsExported)</strong>
+    </section>
+</div>
+
+<div class="workspace-grid">
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>@(editingInvoiceId is null ? "Create invoice" : "Edit invoice")</h3>
+                <p class="page-intro">Link an invoice to a maintenance project, a rent schedule, or leave it standalone.</p>
+            </div>
+        </div>
+
+        <EditForm class="record-form" Model="form" OnValidSubmit="SaveInvoiceAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label class="form-label">Maintenance project (optional)</label>
+                <InputSelect TValue="int?" class="form-select" @bind-Value="form.ProjectId">
+                    <option value="">Not linked</option>
+                    @foreach (var project in projects)
+                    {
+                        <option value="@project.ProjectId">@project.ProjectTitle</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Rent schedule (optional)</label>
+                <InputSelect TValue="int?" class="form-select" @bind-Value="form.ScheduleId">
+                    <option value="">Not linked</option>
+                    @foreach (var schedule in schedules)
+                    {
+                        <option value="@schedule.ScheduleId">@schedule.SummaryLabel</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Invoice date</label>
+                <InputDate class="form-control" @bind-Value="form.InvoiceDate" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Total amount</label>
+                <InputNumber class="form-control" @bind-Value="form.TotalAmount" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Status</label>
+                <InputSelect class="form-select" @bind-Value="form.Status">
+                    @foreach (var status in invoiceStatuses)
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="form-check mb-3">
+                <InputCheckbox class="form-check-input" @bind-Value="form.IsExported" />
+                <label class="form-check-label">Marked as exported</label>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit" disabled="@isSaving">@(isSaving ? "Saving..." : "Save invoice")</button>
+                <button class="btn btn-outline-primary" type="button" @onclick="ResetForm">Clear</button>
+            </div>
+        </EditForm>
+    </section>
+
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>Invoice pipeline</h3>
+                <p class="page-intro">Filter by status and monitor billing progress across all linked modules.</p>
+            </div>
+        </div>
+
+        <div class="filter-row mb-3">
+            <div>
+                <label class="form-label">Status filter</label>
+                <InputSelect class="form-select" @bind-Value="selectedStatus">
+                    <option value="">All</option>
+                    @foreach (var status in invoiceStatuses)
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </InputSelect>
+            </div>
+            <button class="btn btn-outline-primary" type="button" @onclick="LoadAsync">Apply</button>
+        </div>
+
+        @if (isLoading)
+        {
+            <p>Loading invoices...</p>
+        }
+        else if (invoices.Count == 0)
+        {
+            <p>No invoices match the current filter.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Customer</th>
+                            <th>Property</th>
+                            <th>Status</th>
+                            <th>Amount</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var invoice in invoices)
+                        {
+                            <tr>
+                                <td>
+                                    <div>@invoice.ReferenceName</div>
+                                    <small class="text-muted">@invoice.InvoiceDate.ToString("yyyy-MM-dd")</small>
+                                </td>
+                                <td>@invoice.CustomerName</td>
+                                <td>@invoice.PropertyName</td>
+                                <td><span class="@invoice.StatusCssClass">@invoice.Status</span></td>
+                                <td>@invoice.TotalAmount.ToString("C")</td>
+                                <td class="action-cell">
+                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEdit(invoice)">Edit</button>
+                                    <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteInvoiceAsync(invoice.InvoiceId)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private static readonly string[] invoiceStatuses = ["Draft", "Sent", "Paid", "Overdue"];
+
+    private List<InvoiceModel> invoices = [];
+    private List<MaintenanceProjectModel> projects = [];
+    private List<RentScheduleModel> schedules = [];
+    private InvoiceFormModel form = new();
+    private bool isLoading = true;
+    private bool isSaving;
+    private int? editingInvoiceId;
+    private string selectedStatus = string.Empty;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var invoicesTask = ApiClient.GetInvoicesAsync(status: selectedStatus);
+            var projectsTask = ApiClient.GetMaintenanceProjectsAsync();
+            var schedulesTask = ApiClient.GetRentSchedulesAsync();
+
+            await Task.WhenAll(invoicesTask, projectsTask, schedulesTask);
+
+            invoices = invoicesTask.Result;
+            projects = projectsTask.Result;
+            schedules = schedulesTask.Result;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveInvoiceAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        try
+        {
+            if (editingInvoiceId is int invoiceId)
+            {
+                await ApiClient.UpdateInvoiceAsync(invoiceId, form);
+            }
+            else
+            {
+                await ApiClient.CreateInvoiceAsync(form);
+            }
+
+            await LoadAsync();
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void BeginEdit(InvoiceModel invoice)
+    {
+        editingInvoiceId = invoice.InvoiceId;
+        form = InvoiceFormModel.FromInvoice(invoice);
+        errorMessage = null;
+    }
+
+    private async Task DeleteInvoiceAsync(int invoiceId)
+    {
+        try
+        {
+            await ApiClient.DeleteInvoiceAsync(invoiceId);
+            await LoadAsync();
+
+            if (editingInvoiceId == invoiceId)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void ResetForm()
+    {
+        form = new InvoiceFormModel();
+        editingInvoiceId = null;
+        errorMessage = null;
+    }
+}

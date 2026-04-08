@@ -1,0 +1,41 @@
+@inherits LayoutComponentBase
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <div>
+                <p class="eyebrow">Week-9-Shananigans</p>
+                <h2>Property Management Dashboard</h2>
+            </div>
+            <AuthorizeView>
+                <Authorized>
+                    <div class="top-row-actions">
+                        <span class="top-row-note">API + Blazor WebAssembly</span>
+                        <button class="btn btn-outline-primary" @onclick="LogOutAsync">Log out</button>
+                    </div>
+                </Authorized>
+                <NotAuthorized>
+                    <span class="top-row-note">API + Blazor WebAssembly</span>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    [Inject] private SimpleAuthStateProvider AuthStateProvider { get; set; } = default!;
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+
+    private async Task LogOutAsync()
+    {
+        await AuthStateProvider.SignOutAsync();
+        NavigationManager.NavigateTo("/login", replace: true);
+    }
+}

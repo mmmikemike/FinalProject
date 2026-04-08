@@ -1,0 +1,50 @@
+:root {
+  --pm-bg: #f7f2ea;
+  --pm-bg-deep: #efe6d7;
+  --pm-navy: #11354a;
+  --pm-teal: #237484;
+  --pm-gold: #c17b38;
+  --pm-ink: #233746;
+  --pm-muted: #5c6d78;
+  --font-body: 'Aptos', 'Segoe UI', sans-serif;
+  --font-heading: 'Iowan Old Style', 'Palatino Linotype', serif;
+
+  font-family: var(--font-body);
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--pm-ink);
+  background:
+    radial-gradient(circle at top left, rgba(35, 116, 132, 0.12), transparent 30%),
+    radial-gradient(circle at right center, rgba(193, 123, 56, 0.14), transparent 24%),
+    linear-gradient(180deg, var(--pm-bg) 0%, #fdfbf7 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+a,
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+}
+
+* {
+  box-sizing: border-box;
+}

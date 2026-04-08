@@ -1,0 +1,487 @@
+@page "/maintenance-projects"
+@attribute [Authorize]
+@inject PropertyManagementApiClient ApiClient
+
+<PageTitle>Maintenance Projects</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Maintenance projects</h1>
+        <p class="page-intro">Track bid-to-close project work, vendors, and proof-based work logs from a single admin workspace.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+<div class="dashboard-grid">
+    @foreach (var status in projectStatuses)
+    {
+        <section class="stat-card compact-card">
+            <span class="stat-label">@status</span>
+            <strong>@projects.Count(project => project.Status == status)</strong>
+        </section>
+    }
+</div>
+
+<div class="workspace-grid">
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>@(editingProjectId is null ? "Add project" : "Edit project")</h3>
+                <p class="page-intro">New module added from the expanded admin design docs.</p>
+            </div>
+        </div>
+
+        <EditForm class="record-form" Model="projectForm" OnValidSubmit="SaveProjectAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label class="form-label">Property</label>
+                <InputSelect class="form-select" @bind-Value="projectForm.PropertyId">
+                    <option value="0">Select a property</option>
+                    @foreach (var property in properties)
+                    {
+                        <option value="@property.PropertyId">@property.FullAddressLabel</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Project title</label>
+                <InputText class="form-control" @bind-Value="projectForm.ProjectTitle" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Assigned vendor</label>
+                <InputText class="form-control" @bind-Value="projectForm.AssignedVendor" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Bid amount</label>
+                <InputNumber class="form-control" @bind-Value="projectForm.BidAmount" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Status</label>
+                <InputSelect class="form-select" @bind-Value="projectForm.Status">
+                    @foreach (var status in projectStatuses)
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit" disabled="@isSavingProject">@(isSavingProject ? "Saving..." : "Save project")</button>
+                <button class="btn btn-outline-primary" type="button" @onclick="ResetProjectForm">Clear</button>
+            </div>
+        </EditForm>
+    </section>
+
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>Project board</h3>
+                <p class="page-intro">Filter by status, then choose a project to manage its proof log below.</p>
+            </div>
+        </div>
+
+        <div class="filter-row mb-3">
+            <div>
+                <label class="form-label">Status filter</label>
+                <InputSelect class="form-select" @bind-Value="selectedProjectStatus">
+                    <option value="">All</option>
+                    @foreach (var status in projectStatuses)
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </InputSelect>
+            </div>
+            <button class="btn btn-outline-primary" type="button" @onclick="LoadProjectsAsync">Apply</button>
+        </div>
+
+        @if (isLoadingProjects)
+        {
+            <p>Loading maintenance projects...</p>
+        }
+        else if (projects.Count == 0)
+        {
+            <p>No projects match the current filter.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Project</th>
+                            <th>Property</th>
+                            <th>Status</th>
+                            <th>Bid</th>
+                            <th>Hours</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var project in projects)
+                        {
+                            <tr class="@(selectedProjectId == project.ProjectId ? "table-active" : string.Empty)">
+                                <td>
+                                    <div>@project.ProjectTitle</div>
+                                    <small class="text-muted">@project.AssignedVendor</small>
+                                </td>
+                                <td>@project.PropertyLabel</td>
+                                <td><span class="@project.StatusCssClass">@project.Status</span></td>
+                                <td>@project.BidAmount.ToString("C")</td>
+                                <td>@project.LoggedHours.ToString("0.##")</td>
+                                <td class="action-cell">
+                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => SelectProject(project.ProjectId)">Logs</button>
+                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEditProject(project)">Edit</button>
+                                    <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteProjectAsync(project.ProjectId)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+<section class="glass-panel mt-4">
+    <div class="section-header">
+        <div>
+            <h3>Work logs</h3>
+            <p class="page-intro">@SelectedProjectLabel</p>
+        </div>
+    </div>
+
+    @if (selectedProjectId is null)
+    {
+        <p>Select a project to manage work logs.</p>
+    }
+    else
+    {
+        <div class="workspace-grid">
+            <section>
+                <EditForm class="record-form" Model="workLogForm" OnValidSubmit="SaveWorkLogAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="mb-3">
+                        <label class="form-label">Clock in</label>
+                        <InputDate class="form-control" @bind-Value="workLogForm.ClockInTime" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Clock out</label>
+                        <InputDate class="form-control" @bind-Value="workLogForm.ClockOutTime" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">GPS location</label>
+                        <InputText class="form-control" @bind-Value="workLogForm.GpsLocation" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Proof photo URL</label>
+                        <InputText class="form-control" @bind-Value="workLogForm.ProofPhotoUrl" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Materials used</label>
+                        <InputTextArea class="form-control" @bind-Value="workLogForm.MaterialsUsed" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Vendor signature</label>
+                        <InputText class="form-control" @bind-Value="workLogForm.VendorSignature" />
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="btn btn-primary" type="submit" disabled="@isSavingWorkLog">@(isSavingWorkLog ? "Saving..." : "Save work log")</button>
+                        <button class="btn btn-outline-primary" type="button" @onclick="ResetWorkLogForm">Clear</button>
+                    </div>
+                </EditForm>
+            </section>
+
+            <section>
+                @if (isLoadingLogs)
+                {
+                    <p>Loading work logs...</p>
+                }
+                else if (workLogs.Count == 0)
+                {
+                    <p>No proof logs recorded for this project yet.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Clock in</th>
+                                    <th>Clock out</th>
+                                    <th>GPS</th>
+                                    <th>Hours</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var log in workLogs)
+                                {
+                                    <tr>
+                                        <td>@log.ClockInTime.ToString("yyyy-MM-dd")</td>
+                                        <td>@(log.ClockOutTime?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                        <td>@log.GpsLocation</td>
+                                        <td>@log.LoggedHours.ToString("0.##")</td>
+                                        <td class="action-cell">
+                                            <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEditWorkLog(log)">Edit</button>
+                                            <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteWorkLogAsync(log.LogId)">Delete</button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        </div>
+    }
+</section>
+
+@code {
+    private static readonly string[] projectStatuses = ["Bid", "Approved", "Work Order", "Invoiced", "Closed"];
+
+    private List<PropertyOption> properties = [];
+    private List<MaintenanceProjectModel> projects = [];
+    private List<WorkLogModel> workLogs = [];
+    private MaintenanceProjectFormModel projectForm = new();
+    private WorkLogFormModel workLogForm = new();
+    private bool isLoadingProjects = true;
+    private bool isLoadingLogs;
+    private bool isSavingProject;
+    private bool isSavingWorkLog;
+    private int? editingProjectId;
+    private int? editingWorkLogId;
+    private int? selectedProjectId;
+    private string selectedProjectStatus = string.Empty;
+    private string? errorMessage;
+
+    private string SelectedProjectLabel =>
+        selectedProjectId is null
+            ? "Select a project from the board to review proof entries."
+            : projects.FirstOrDefault(project => project.ProjectId == selectedProjectId)?.ProjectTitle ?? "Selected project";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            properties = await ApiClient.GetPropertiesAsync();
+            await LoadProjectsAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task LoadProjectsAsync()
+    {
+        isLoadingProjects = true;
+        errorMessage = null;
+
+        try
+        {
+            projects = await ApiClient.GetMaintenanceProjectsAsync(status: selectedProjectStatus);
+
+            if (selectedProjectId.HasValue && projects.All(project => project.ProjectId != selectedProjectId.Value))
+            {
+                selectedProjectId = null;
+                workLogs = [];
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoadingProjects = false;
+        }
+    }
+
+    private async Task SelectProject(int projectId)
+    {
+        selectedProjectId = projectId;
+        workLogForm.ProjectId = projectId;
+        editingWorkLogId = null;
+        await LoadWorkLogsAsync();
+    }
+
+    private async Task LoadWorkLogsAsync()
+    {
+        if (!selectedProjectId.HasValue)
+        {
+            return;
+        }
+
+        isLoadingLogs = true;
+
+        try
+        {
+            workLogs = await ApiClient.GetWorkLogsAsync(selectedProjectId.Value);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoadingLogs = false;
+        }
+    }
+
+    private async Task SaveProjectAsync()
+    {
+        isSavingProject = true;
+        errorMessage = null;
+
+        try
+        {
+            if (editingProjectId is int projectId)
+            {
+                await ApiClient.UpdateMaintenanceProjectAsync(projectId, projectForm);
+            }
+            else
+            {
+                await ApiClient.CreateMaintenanceProjectAsync(projectForm);
+            }
+
+            await LoadProjectsAsync();
+            ResetProjectForm();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSavingProject = false;
+        }
+    }
+
+    private async Task SaveWorkLogAsync()
+    {
+        if (!selectedProjectId.HasValue)
+        {
+            return;
+        }
+
+        isSavingWorkLog = true;
+        errorMessage = null;
+        workLogForm.ProjectId = selectedProjectId.Value;
+
+        try
+        {
+            if (editingWorkLogId is int logId)
+            {
+                await ApiClient.UpdateWorkLogAsync(logId, workLogForm);
+            }
+            else
+            {
+                await ApiClient.CreateWorkLogAsync(workLogForm);
+            }
+
+            await LoadProjectsAsync();
+            await LoadWorkLogsAsync();
+            ResetWorkLogForm();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSavingWorkLog = false;
+        }
+    }
+
+    private void BeginEditProject(MaintenanceProjectModel project)
+    {
+        editingProjectId = project.ProjectId;
+        projectForm = MaintenanceProjectFormModel.FromProject(project);
+        errorMessage = null;
+    }
+
+    private void BeginEditWorkLog(WorkLogModel log)
+    {
+        editingWorkLogId = log.LogId;
+        workLogForm = WorkLogFormModel.FromWorkLog(log);
+        errorMessage = null;
+    }
+
+    private async Task DeleteProjectAsync(int projectId)
+    {
+        try
+        {
+            await ApiClient.DeleteMaintenanceProjectAsync(projectId);
+            await LoadProjectsAsync();
+
+            if (selectedProjectId == projectId)
+            {
+                selectedProjectId = null;
+                workLogs = [];
+            }
+
+            if (editingProjectId == projectId)
+            {
+                ResetProjectForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task DeleteWorkLogAsync(int logId)
+    {
+        try
+        {
+            await ApiClient.DeleteWorkLogAsync(logId);
+            await LoadProjectsAsync();
+            await LoadWorkLogsAsync();
+
+            if (editingWorkLogId == logId)
+            {
+                ResetWorkLogForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void ResetProjectForm()
+    {
+        projectForm = new MaintenanceProjectFormModel();
+        editingProjectId = null;
+        errorMessage = null;
+    }
+
+    private void ResetWorkLogForm()
+    {
+        workLogForm = new WorkLogFormModel
+        {
+            ProjectId = selectedProjectId ?? 0
+        };
+        editingWorkLogId = null;
+        errorMessage = null;
+    }
+}

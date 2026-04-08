@@ -1,0 +1,221 @@
+@page "/tenants"
+@attribute [Authorize]
+@inject PropertyManagementApiClient ApiClient
+
+<PageTitle>Tenants</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Tenants</h1>
+        <p class="page-intro">Create, edit, and remove tenant records linked to a property.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+<div class="workspace-grid">
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>@(editingTenantId is null ? "Add tenant" : "Edit tenant")</h3>
+                <p class="page-intro">Use the property lookup to keep foreign keys valid.</p>
+            </div>
+        </div>
+
+        <EditForm class="record-form" Model="form" OnValidSubmit="SaveTenantAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label class="form-label">First name</label>
+                <InputText class="form-control" @bind-Value="form.FirstName" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Last name</label>
+                <InputText class="form-control" @bind-Value="form.LastName" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Email</label>
+                <InputText class="form-control" @bind-Value="form.Email" />
+                <ValidationMessage For="() => form.Email" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Phone number</label>
+                <InputText class="form-control" @bind-Value="form.PhoneNumber" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Property</label>
+                <InputSelect class="form-select" @bind-Value="form.PropertyId">
+                    <option value="0">Select a property</option>
+                    @foreach (var property in properties)
+                    {
+                        <option value="@property.PropertyId">@property.DisplayLabel</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => form.PropertyId" />
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit" disabled="@isSaving">@(isSaving ? "Saving..." : "Save tenant")</button>
+                <button class="btn btn-outline-primary" type="button" @onclick="ResetForm">Clear</button>
+            </div>
+        </EditForm>
+    </section>
+
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>Tenant records</h3>
+                <p class="page-intro">Current tenants returned by the API.</p>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <p>Loading tenants...</p>
+        }
+        else if (tenants.Count == 0)
+        {
+            <p>No tenants found yet.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Property</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var tenant in tenants)
+                        {
+                            <tr>
+                                <td>@tenant.FullName</td>
+                                <td>@tenant.Email</td>
+                                <td>@tenant.PhoneNumber</td>
+                                <td>@tenant.PropertyName</td>
+                                <td class="action-cell">
+                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEdit(tenant)">Edit</button>
+                                    <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteTenantAsync(tenant.TenantId)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private List<PropertyOption> properties = [];
+    private List<TenantModel> tenants = [];
+    private TenantFormModel form = new();
+    private bool isLoading = true;
+    private bool isSaving;
+    private int? editingTenantId;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var propertiesTask = ApiClient.GetPropertiesAsync();
+            var tenantsTask = ApiClient.GetTenantsAsync();
+
+            await Task.WhenAll(propertiesTask, tenantsTask);
+
+            properties = propertiesTask.Result;
+            tenants = tenantsTask.Result;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveTenantAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        try
+        {
+            if (editingTenantId is int tenantId)
+            {
+                await ApiClient.UpdateTenantAsync(tenantId, form);
+            }
+            else
+            {
+                await ApiClient.CreateTenantAsync(form);
+            }
+
+            await LoadAsync();
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void BeginEdit(TenantModel tenant)
+    {
+        editingTenantId = tenant.TenantId;
+        form = TenantFormModel.FromTenant(tenant);
+        errorMessage = null;
+    }
+
+    private async Task DeleteTenantAsync(int tenantId)
+    {
+        try
+        {
+            await ApiClient.DeleteTenantAsync(tenantId);
+            await LoadAsync();
+
+            if (editingTenantId == tenantId)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void ResetForm()
+    {
+        form = new TenantFormModel();
+        editingTenantId = null;
+        errorMessage = null;
+    }
+}

@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "Full Stack",
+    "Projects": [
+      {
+        "Path": "PropertyManagement.API\\PropertyManagement.API.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "PropertyManagement.Blazor\\PropertyManagement.Blazor.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

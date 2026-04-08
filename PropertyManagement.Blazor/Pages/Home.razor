@@ -1,0 +1,294 @@
+@page "/"
+@attribute [Authorize]
+@inject PropertyManagementApiClient ApiClient
+
+<PageTitle>Dashboard</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Admin dashboard</h1>
+        <p class="page-intro">One workspace for portfolio health, rent follow-up, maintenance oversight, and invoice tracking.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-warning" role="alert">@errorMessage</div>
+}
+else if (isLoading)
+{
+    <p>Loading admin dashboard...</p>
+}
+else
+{
+    <div class="dashboard-grid dashboard-grid-wide">
+        <section class="stat-card">
+            <span class="stat-label">Properties</span>
+            <strong>@properties.Count</strong>
+            <p>Active units tracked across the portfolio.</p>
+        </section>
+        <section class="stat-card">
+            <span class="stat-label">Tenants</span>
+            <strong>@tenants.Count</strong>
+            <p>Resident records connected to current units.</p>
+        </section>
+        <section class="stat-card">
+            <span class="stat-label">Outstanding rent</span>
+            <strong>@outstandingRent.ToString("C0")</strong>
+            <p>@delinquentSchedules.Count schedules still need follow-up.</p>
+        </section>
+        <section class="stat-card">
+            <span class="stat-label">Open projects</span>
+            <strong>@openProjects.Count</strong>
+            <p>Maintenance jobs not yet closed.</p>
+        </section>
+        <section class="stat-card">
+            <span class="stat-label">Overdue invoices</span>
+            <strong>@overdueInvoices.Count</strong>
+            <p>@invoicePipeline.ToString("C0") in draft, sent, or overdue invoices.</p>
+        </section>
+        <section class="stat-card">
+            <span class="stat-label">New applications</span>
+            <strong>@applications.Count(item => item.Status == "New")</strong>
+            <p>@applications.Count total leasing inquiries received from the public site.</p>
+        </section>
+    </div>
+
+    <div class="panel-grid admin-board">
+        <section class="glass-panel panel-span-2">
+            <div class="section-header">
+                <div>
+                    <h3>Rent follow-up queue</h3>
+                    <p class="page-intro">Prioritized schedules with remaining balances or late status.</p>
+                </div>
+                <a class="btn btn-outline-primary" href="rent-schedules">Open schedules</a>
+            </div>
+
+            @if (delinquentSchedules.Count == 0)
+            {
+                <p>All visible schedules are current.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                            <tr>
+                                <th>Tenant</th>
+                                <th>Status</th>
+                                <th>Due date</th>
+                                <th>Remaining</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var schedule in delinquentSchedules)
+                            {
+                                <tr>
+                                    <td>@schedule.TenantName</td>
+                                    <td><span class="@schedule.StatusCssClass">@schedule.Status</span></td>
+                                    <td>@schedule.DueDate.ToString("yyyy-MM-dd")</td>
+                                    <td>@(Math.Max(0m, schedule.TotalDue - schedule.TotalPaid).ToString("C"))</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="glass-panel">
+            <div class="section-header">
+                <div>
+                    <h3>Maintenance snapshot</h3>
+                    <p class="page-intro">Current queue by project status.</p>
+                </div>
+                <a class="btn btn-outline-primary" href="maintenance-projects">Manage</a>
+            </div>
+
+            <div class="mini-stack">
+                @foreach (var group in projectStatusBreakdown)
+                {
+                    <div class="mini-row">
+                        <span>@group.Key</span>
+                        <strong>@group.Value</strong>
+                    </div>
+                }
+            </div>
+
+            <hr />
+
+            @foreach (var project in openProjects.Take(4))
+            {
+                <div class="list-card">
+                    <div>
+                        <strong>@project.ProjectTitle</strong>
+                        <p>@project.PropertyLabel</p>
+                    </div>
+                    <span class="@project.StatusCssClass">@project.Status</span>
+                </div>
+            }
+        </section>
+
+        <section class="glass-panel">
+            <div class="section-header">
+                <div>
+                    <h3>Invoice watchlist</h3>
+                    <p class="page-intro">Recent items still moving through the pipeline.</p>
+                </div>
+                <a class="btn btn-outline-primary" href="invoices">Review</a>
+            </div>
+
+            @foreach (var invoice in invoices.Where(item => item.Status != "Paid").OrderByDescending(item => item.InvoiceDate).Take(4))
+            {
+                <div class="list-card">
+                    <div>
+                        <strong>@invoice.ReferenceName</strong>
+                        <p>@invoice.PropertyName</p>
+                    </div>
+                    <div class="text-end">
+                        <span class="@invoice.StatusCssClass">@invoice.Status</span>
+                        <p class="mini-note">@invoice.TotalAmount.ToString("C")</p>
+                    </div>
+                </div>
+            }
+        </section>
+
+        <section class="glass-panel">
+            <div class="section-header">
+                <div>
+                    <h3>Leasing pipeline</h3>
+                    <p class="page-intro">Recent applicants from the public React website.</p>
+                </div>
+                <a class="btn btn-outline-primary" href="applications">Open applications</a>
+            </div>
+
+            @if (applications.Count == 0)
+            {
+                <p>No applications have been submitted yet.</p>
+            }
+            else
+            {
+                @foreach (var application in applications.Take(4))
+                {
+                    <div class="list-card">
+                        <div>
+                            <strong>@application.ApplicantName</strong>
+                            <p>@application.PropertyLabel</p>
+                        </div>
+                        <div class="text-end">
+                            <span class="@application.StatusCssClass">@application.Status</span>
+                            <p class="mini-note">@application.PreferredMoveInDate.ToString("yyyy-MM-dd")</p>
+                        </div>
+                    </div>
+                }
+            }
+        </section>
+
+        <section class="glass-panel panel-span-2">
+            <div class="section-header">
+                <div>
+                    <h3>Admin shortcuts</h3>
+                    <p class="page-intro">Jump straight into the new modules added on top of the base assignment.</p>
+                </div>
+            </div>
+
+            <div class="shortcut-grid">
+                <a class="shortcut-card" href="properties">
+                    <strong>Properties</strong>
+                    <p>Maintain unit records, monthly rent, and occupancy context.</p>
+                </a>
+                <a class="shortcut-card" href="rent-records">
+                    <strong>Rent records</strong>
+                    <p>Review tenant ledgers and property-level financial rollups.</p>
+                </a>
+                <a class="shortcut-card" href="maintenance-projects">
+                    <strong>Maintenance</strong>
+                    <p>Track bid-to-close projects plus proof-based work logs.</p>
+                </a>
+                <a class="shortcut-card" href="invoices">
+                    <strong>Invoices</strong>
+                    <p>Manage billing pipeline across rent and maintenance workflows.</p>
+                </a>
+                <a class="shortcut-card" href="applications">
+                    <strong>Applications</strong>
+                    <p>Review public leasing applications and keep the pipeline moving.</p>
+                </a>
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private string? errorMessage;
+    private List<PropertyOption> properties = [];
+    private List<TenantModel> tenants = [];
+    private List<RentScheduleModel> schedules = [];
+    private List<MaintenanceProjectModel> projects = [];
+    private List<InvoiceModel> invoices = [];
+    private List<PropertyApplicationModel> applications = [];
+
+    private decimal outstandingRent;
+    private decimal invoicePipeline;
+    private List<RentScheduleModel> delinquentSchedules = [];
+    private List<MaintenanceProjectModel> openProjects = [];
+    private Dictionary<string, int> projectStatusBreakdown = new();
+    private List<InvoiceModel> overdueInvoices = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var propertiesTask = ApiClient.GetPropertiesAsync();
+            var tenantsTask = ApiClient.GetTenantsAsync();
+            var schedulesTask = ApiClient.GetRentSchedulesAsync();
+            var projectsTask = ApiClient.GetMaintenanceProjectsAsync();
+            var invoicesTask = ApiClient.GetInvoicesAsync();
+            var applicationsTask = ApiClient.GetPropertyApplicationsAsync();
+
+            await Task.WhenAll(propertiesTask, tenantsTask, schedulesTask, projectsTask, invoicesTask, applicationsTask);
+
+            properties = propertiesTask.Result;
+            tenants = tenantsTask.Result;
+            schedules = schedulesTask.Result;
+            projects = projectsTask.Result;
+            invoices = invoicesTask.Result;
+            applications = applicationsTask.Result;
+
+            outstandingRent = schedules.Sum(schedule => Math.Max(0m, schedule.TotalDue - schedule.TotalPaid));
+            delinquentSchedules = schedules
+                .Where(schedule => schedule.Status is "Late" or "Unpaid" or "Partial" || schedule.TotalDue > schedule.TotalPaid)
+                .OrderByDescending(schedule => Math.Max(0m, schedule.TotalDue - schedule.TotalPaid))
+                .Take(6)
+                .ToList();
+
+            openProjects = projects
+                .Where(project => project.Status != "Closed")
+                .OrderBy(project => project.Status)
+                .ThenBy(project => project.ProjectTitle)
+                .ToList();
+
+            projectStatusBreakdown = projects
+                .GroupBy(project => project.Status)
+                .OrderBy(group => group.Key)
+                .ToDictionary(group => group.Key, group => group.Count());
+
+            overdueInvoices = invoices
+                .Where(invoice => invoice.Status == "Overdue")
+                .OrderByDescending(invoice => invoice.InvoiceDate)
+                .ToList();
+
+            invoicePipeline = invoices
+                .Where(invoice => invoice.Status != "Paid")
+                .Sum(invoice => invoice.TotalAmount);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Dashboard data could not load. Make sure the API is running and the updated database script has been applied. Details: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

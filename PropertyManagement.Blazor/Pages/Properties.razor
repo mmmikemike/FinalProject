@@ -1,0 +1,203 @@
+@page "/properties"
+@attribute [Authorize]
+@inject PropertyManagementApiClient ApiClient
+
+<PageTitle>Properties</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Properties</h1>
+        <p class="page-intro">Manage unit-level property records, monthly rent, and occupancy context for the admin panel.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+<div class="workspace-grid">
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>@(editingPropertyId is null ? "Add property" : "Edit property")</h3>
+                <p class="page-intro">This is new admin-only functionality layered on top of the existing tenant workflow.</p>
+            </div>
+        </div>
+
+        <EditForm class="record-form" Model="form" OnValidSubmit="SavePropertyAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label class="form-label">Property name</label>
+                <InputText class="form-control" @bind-Value="form.Name" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Unit number</label>
+                <InputText class="form-control" @bind-Value="form.UnitNumber" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Address</label>
+                <InputText class="form-control" @bind-Value="form.Address" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Monthly rent</label>
+                <InputNumber class="form-control" @bind-Value="form.MonthlyRent" />
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit" disabled="@isSaving">@(isSaving ? "Saving..." : "Save property")</button>
+                <button class="btn btn-outline-primary" type="button" @onclick="ResetForm">Clear</button>
+            </div>
+        </EditForm>
+    </section>
+
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>Property portfolio</h3>
+                <p class="page-intro">Unit-by-unit records with linked tenant and maintenance activity counts.</p>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <p>Loading properties...</p>
+        }
+        else if (properties.Count == 0)
+        {
+            <p>No properties found yet.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Property</th>
+                            <th>Address</th>
+                            <th>Monthly rent</th>
+                            <th>Tenants</th>
+                            <th>Open projects</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var property in properties)
+                        {
+                            <tr>
+                                <td>@property.DisplayLabel</td>
+                                <td>@property.Address</td>
+                                <td>@property.MonthlyRent.ToString("C")</td>
+                                <td>@property.ActiveTenantCount</td>
+                                <td>@property.OpenProjectCount</td>
+                                <td class="action-cell">
+                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEdit(property)">Edit</button>
+                                    <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeletePropertyAsync(property.PropertyId)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private List<PropertyOption> properties = [];
+    private PropertyFormModel form = new();
+    private bool isLoading = true;
+    private bool isSaving;
+    private int? editingPropertyId;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            properties = await ApiClient.GetPropertiesAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SavePropertyAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        try
+        {
+            if (editingPropertyId is int propertyId)
+            {
+                await ApiClient.UpdatePropertyAsync(propertyId, form);
+            }
+            else
+            {
+                await ApiClient.CreatePropertyAsync(form);
+            }
+
+            await LoadAsync();
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void BeginEdit(PropertyOption property)
+    {
+        editingPropertyId = property.PropertyId;
+        form = PropertyFormModel.FromProperty(property);
+        errorMessage = null;
+    }
+
+    private async Task DeletePropertyAsync(int propertyId)
+    {
+        try
+        {
+            await ApiClient.DeletePropertyAsync(propertyId);
+            await LoadAsync();
+
+            if (editingPropertyId == propertyId)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void ResetForm()
+    {
+        form = new PropertyFormModel();
+        editingPropertyId = null;
+        errorMessage = null;
+    }
+}

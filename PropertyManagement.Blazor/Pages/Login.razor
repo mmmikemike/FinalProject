@@ -1,0 +1,109 @@
+@page "/login"
+@layout AuthLayout
+@attribute [AllowAnonymous]
+@inject SimpleAuthStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>Admin Login</PageTitle>
+
+<div class="login-shell">
+    <section class="login-card">
+        <div class="login-copy">
+            <p class="login-eyebrow">Property Management Admin</p>
+            <h1>Secure admin access</h1>
+            <p class="page-intro">Sign in to manage properties, tenants, rent workflows, maintenance, and invoices.</p>
+        </div>
+
+        <EditForm Model="form" OnValidSubmit="HandleLoginAsync">
+            <DataAnnotationsValidator />
+
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="alert alert-danger" role="alert">@errorMessage</div>
+            }
+
+            <div class="mb-3">
+                <label class="form-label" for="username">Username</label>
+                <InputText id="username" class="form-control form-control-lg" @bind-Value="form.Username" />
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label" for="password">Password</label>
+                <InputText id="password" type="password" class="form-control form-control-lg" @bind-Value="form.Password" />
+            </div>
+
+            <button class="btn btn-primary btn-lg w-100" type="submit">Log in</button>
+        </EditForm>
+
+        <div class="login-footer">
+            <span>Username: <strong>ADMIN</strong></span>
+            <span>Password: <strong>ADMIN</strong></span>
+        </div>
+    </section>
+</div>
+
+@code {
+    private readonly LoginFormModel form = new();
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticationState = await AuthStateProvider.GetAuthenticationStateAsync();
+
+        if (authenticationState.User.Identity?.IsAuthenticated == true)
+        {
+            NavigationManager.NavigateTo(GetTargetUrl(), replace: true);
+        }
+    }
+
+    private async Task HandleLoginAsync()
+    {
+        errorMessage = null;
+
+        var loggedIn = await AuthStateProvider.SignInAsync(form.Username, form.Password);
+        if (!loggedIn)
+        {
+            errorMessage = "Password or Username is invalid. Please try again";
+            return;
+        }
+
+        NavigationManager.NavigateTo(GetTargetUrl(), replace: true);
+    }
+
+    private string GetTargetUrl()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var returnUrl = GetQueryValue(uri.Query, "returnUrl");
+
+        return string.IsNullOrWhiteSpace(returnUrl) || !returnUrl.StartsWith("/")
+            ? "/"
+            : returnUrl;
+    }
+
+    private static string? GetQueryValue(string queryString, string key)
+    {
+        if (string.IsNullOrWhiteSpace(queryString))
+        {
+            return null;
+        }
+
+        foreach (var segment in queryString.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = segment.Split('=', 2);
+            if (parts.Length == 0 || !string.Equals(parts[0], key, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return parts.Length == 2 ? Uri.UnescapeDataString(parts[1]) : string.Empty;
+        }
+
+        return null;
+    }
+
+    private sealed class LoginFormModel
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+}

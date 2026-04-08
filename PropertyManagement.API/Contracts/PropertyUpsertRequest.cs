@@ -1,0 +1,17 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace PropertyManagement.API.Contracts;
+
+public class PropertyUpsertRequest
+{
+    [Required]
+    public string Name { get; set; } = string.Empty;
+
+    [Required]
+    public string Address { get; set; } = string.Empty;
+
+    public string UnitNumber { get; set; } = string.Empty;
+
+    [Range(0, double.MaxValue)]
+    public decimal MonthlyRent { get; set; }
+}
