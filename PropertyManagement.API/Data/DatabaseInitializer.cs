@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PropertyManagement.API.Models;
 
 namespace PropertyManagement.API.Data;
 
@@ -297,5 +298,17 @@ public static class DatabaseInitializer
         {
             await dbContext.Database.CloseConnectionAsync();
         }
+
+        if (!dbContext.Users.Any()) // seed intial roles and users
+        {
+            dbContext.Users.AddRange(
+                new User { Username = "admin", Role = "Admin", Password = ("admin123") },
+                new User { Username = "staff1", Role = "Staff", Password = ("staff123") },
+                new User { Username = "contractor1", Role = "Contractor", Password = ("contractor123") },
+                new User { Username = "tenant1", Role = "Tenant", Password = ("tenant123") }
+            );
+            await dbContext.SaveChangesAsync();
+        }
+   
     }
 }

@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<WorkLog> WorkLogs => Set<WorkLog>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<PropertyApplication> PropertyApplications => Set<PropertyApplication>();
+    public DbSet<User> Users => Set<User>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -26,6 +27,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<WorkLog>().ToTable("WorkLogs");
         modelBuilder.Entity<Invoice>().ToTable("Invoices");
         modelBuilder.Entity<PropertyApplication>().ToTable("PropertyApplications");
+        modelBuilder.Entity<User>().ToTable("Users");
+
+
+        modelBuilder.Entity<User>()
+            .HasKey(user => user.Id);
+
+        modelBuilder.Entity<User>()
+            .Property(user => user.Username)
+            .HasMaxLength(50)
+            .IsRequired();
+
+        modelBuilder.Entity<User>()
+            .Property(user => user.Password)
+            .HasMaxLength(50)
+            .IsRequired();
+
+        modelBuilder.Entity<User>()
+            .Property(user => user.Role)
+            .HasMaxLength(20)
+            .IsRequired();
 
         modelBuilder.Entity<PropertyApplication>()
             .HasKey(application => application.ApplicationId);
@@ -202,6 +223,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany(property => property.Applications)
             .HasForeignKey(application => application.PropertyId)
             .OnDelete(DeleteBehavior.Restrict);
+
 
         modelBuilder.Entity<Property>().HasData(
             new Property { PropertyId = 1, Name = "Sunrise Apts", Address = "123 Maple St", UnitNumber = "1A", MonthlyRent = 1200m },
