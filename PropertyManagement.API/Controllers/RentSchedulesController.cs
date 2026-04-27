@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
 using PropertyManagement.API.Data;
 using PropertyManagement.API.Models;
+using Microsoft.AspNetCore.Authorization;
+
 
 namespace PropertyManagement.API.Controllers;
 
@@ -11,6 +13,7 @@ namespace PropertyManagement.API.Controllers;
 [ApiController]
 public class RentSchedulesController(AppDbContext context) : ControllerBase
 {
+    [Authorize(Roles = "Admin,Staff,Tenant")] //make so tenants can only see their own schedules
     [HttpGet]
     public async Task<ActionResult<IEnumerable<RentScheduleDto>>> GetRentSchedules(
         [FromQuery] string? status = null,
@@ -53,6 +56,7 @@ public class RentSchedulesController(AppDbContext context) : ControllerBase
         return Ok(schedules.Select(MapSchedule));
     }
 
+    [Authorize(Roles = "Admin,Staff,Tenant")] //make so tenants can only see their own schedules
     [HttpGet("{id:int}")]
     public async Task<ActionResult<RentScheduleDto>> GetRentSchedule(int id)
     {
@@ -65,6 +69,7 @@ public class RentSchedulesController(AppDbContext context) : ControllerBase
         return schedule is null ? NotFound() : Ok(MapSchedule(schedule));
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<ActionResult<RentScheduleDto>> PostRentSchedule(RentScheduleUpsertRequest request)
     {
@@ -91,6 +96,7 @@ public class RentSchedulesController(AppDbContext context) : ControllerBase
         return CreatedAtAction(nameof(GetRentSchedule), new { id = schedule.ScheduleId }, await MapScheduleAsync(schedule.ScheduleId));
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPut("{id:int}")]
     public async Task<ActionResult<RentScheduleDto>> PutRentSchedule(int id, RentScheduleUpsertRequest request)
     {
@@ -119,6 +125,7 @@ public class RentSchedulesController(AppDbContext context) : ControllerBase
         return Ok(await MapScheduleAsync(id));
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteRentSchedule(int id)
     {

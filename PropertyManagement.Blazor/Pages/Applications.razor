@@ -1,5 +1,5 @@
 @page "/applications"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Admin")] // admin only 
 @inject PropertyManagementApiClient ApiClient
 
 <PageTitle>Applications</PageTitle>

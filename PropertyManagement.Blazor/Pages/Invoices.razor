@@ -1,5 +1,5 @@
 @page "/invoices"
-@attribute [Authorize]
+@attribute [Authorize (Roles = "Admin,Staff,Contractor")] //admin,staff and contractors can view, but only admin can edit
 @inject PropertyManagementApiClient ApiClient
 
 <PageTitle>Invoices</PageTitle>
@@ -16,7 +16,7 @@
     <div class="alert alert-danger" role="alert">@errorMessage</div>
 }
 
-<div class="dashboard-grid">
+<div class="dashboard-grid" >
     <section class="stat-card compact-card">
         <span class="stat-label">Total invoiced</span>
         <strong>@invoices.Sum(item => item.TotalAmount).ToString("C0")</strong>
@@ -35,7 +35,8 @@
     </section>
 </div>
 
-<div class="workspace-grid">
+<AuthorizeView Roles = "Admin"> //only admin can create/edit invoices 
+    <div class="workspace-grid"> 
     <section class="glass-panel">
         <div class="section-header">
             <div>
@@ -169,8 +170,8 @@
             </div>
         }
     </section>
-</div>
-
+    </div>
+</AuthorizeView>
 @code {
     private static readonly string[] invoiceStatuses = ["Draft", "Sent", "Paid", "Overdue"];
 

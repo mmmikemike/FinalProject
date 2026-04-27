@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
 using PropertyManagement.API.Data;
+using Microsoft.AspNetCore.Authorization;
+
 
 namespace PropertyManagement.API.Controllers;
 
@@ -9,6 +11,8 @@ namespace PropertyManagement.API.Controllers;
 [Route("api/[controller]")]
 public class RentRecordsController(AppDbContext dbContext) : ControllerBase
 {
+
+    [Authorize(Roles = "Admin,Staff")]
     [HttpGet("tenant/{tenantId:int}")]
     public async Task<ActionResult<TenantLedgerDto>> GetTenantLedger(int tenantId)
     {
@@ -68,6 +72,7 @@ public class RentRecordsController(AppDbContext dbContext) : ControllerBase
             ledgerEntries));
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpGet("property/{propertyId:int}")]
     public async Task<ActionResult<PropertyLedgerDto>> GetPropertyLedger(int propertyId)
     {

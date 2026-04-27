@@ -1,5 +1,5 @@
 @page "/"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Admin")] //admin only dashboard only for now since it shows data across all modules
 @inject PropertyManagementApiClient ApiClient
 
 <PageTitle>Dashboard</PageTitle>

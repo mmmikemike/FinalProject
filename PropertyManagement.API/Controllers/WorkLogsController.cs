@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
 using PropertyManagement.API.Data;
 using PropertyManagement.API.Models;
+using Microsoft.AspNetCore.Authorization;
+
 
 namespace PropertyManagement.API.Controllers;
 
@@ -10,6 +12,7 @@ namespace PropertyManagement.API.Controllers;
 [Route("api/[controller]")]
 public class WorkLogsController(AppDbContext dbContext) : ControllerBase
 {
+    [Authorize(Roles = "Admin,Contractor,Staff")]
     [HttpGet]
     public async Task<ActionResult<IEnumerable<WorkLogDto>>> GetWorkLogs([FromQuery] int? projectId = null)
     {
@@ -30,6 +33,7 @@ public class WorkLogsController(AppDbContext dbContext) : ControllerBase
         return Ok(logs.Select(MapLog));
     }
 
+    [Authorize(Roles = "Admin,Contractor,Staff")]
     [HttpGet("{id:int}")]
     public async Task<ActionResult<WorkLogDto>> GetWorkLog(int id)
     {
@@ -41,6 +45,7 @@ public class WorkLogsController(AppDbContext dbContext) : ControllerBase
         return log is null ? NotFound() : Ok(MapLog(log));
     }
 
+    [Authorize(Roles = "Admin,Contractor")]
     [HttpPost]
     public async Task<ActionResult<WorkLogDto>> CreateWorkLog([FromBody] WorkLogUpsertRequest request)
     {
@@ -73,6 +78,7 @@ public class WorkLogsController(AppDbContext dbContext) : ControllerBase
         return CreatedAtAction(nameof(GetWorkLog), new { id = log.LogId }, await MapLogAsync(log.LogId));
     }
 
+    [Authorize(Roles = "Admin,Contractor")]
     [HttpPut("{id:int}")]
     public async Task<ActionResult<WorkLogDto>> UpdateWorkLog(int id, [FromBody] WorkLogUpsertRequest request)
     {
@@ -106,7 +112,7 @@ public class WorkLogsController(AppDbContext dbContext) : ControllerBase
 
         return Ok(await MapLogAsync(id));
     }
-
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteWorkLog(int id)
     {

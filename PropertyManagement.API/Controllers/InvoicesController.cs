@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
@@ -58,7 +59,7 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
 
         return invoice is null ? NotFound() : Ok(MapInvoice(invoice));
     }
-
+    [Authorize(Roles ="Admin,Contractor")]
     [HttpPost]
     public async Task<ActionResult<InvoiceDto>> CreateInvoice([FromBody] InvoiceUpsertRequest request)
     {
@@ -84,6 +85,7 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
         return CreatedAtAction(nameof(GetInvoice), new { id = invoice.InvoiceId }, await MapInvoiceAsync(invoice.InvoiceId));
     }
 
+    [Authorize(Roles = "Admin,Contractor")]
     [HttpPut("{id:int}")]
     public async Task<ActionResult<InvoiceDto>> UpdateInvoice(int id, [FromBody] InvoiceUpsertRequest request)
     {
@@ -110,7 +112,7 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
 
         return Ok(await MapInvoiceAsync(id));
     }
-
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteInvoice(int id)
     {

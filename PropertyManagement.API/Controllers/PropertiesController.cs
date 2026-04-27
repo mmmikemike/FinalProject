@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
@@ -10,6 +11,8 @@ namespace PropertyManagement.API.Controllers;
 [Route("api/[controller]")]
 public class PropertiesController(AppDbContext dbContext) : ControllerBase
 {
+
+    [Authorize(Roles = "Admin,Contractor,Tenant,Staff")]
     [HttpGet]
     public async Task<ActionResult<IEnumerable<PropertyLookupDto>>> GetProperties()
     {
@@ -30,6 +33,7 @@ public class PropertiesController(AppDbContext dbContext) : ControllerBase
         return Ok(properties);
     }
 
+    [Authorize(Roles = "Admin,Contractor,Tenant,Staff")]
     [HttpGet("{id:int}")]
     public async Task<ActionResult<PropertyLookupDto>> GetProperty(int id)
     {
@@ -49,6 +53,7 @@ public class PropertiesController(AppDbContext dbContext) : ControllerBase
         return property is null ? NotFound() : Ok(property);
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<ActionResult<PropertyLookupDto>> CreateProperty([FromBody] PropertyUpsertRequest request)
     {
@@ -66,6 +71,7 @@ public class PropertiesController(AppDbContext dbContext) : ControllerBase
         return CreatedAtAction(nameof(GetProperty), new { id = property.PropertyId }, await MapPropertyAsync(property.PropertyId));
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPut("{id:int}")]
     public async Task<ActionResult<PropertyLookupDto>> UpdateProperty(int id, [FromBody] PropertyUpsertRequest request)
     {
@@ -85,6 +91,7 @@ public class PropertiesController(AppDbContext dbContext) : ControllerBase
         return Ok(await MapPropertyAsync(id));
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteProperty(int id)
     {

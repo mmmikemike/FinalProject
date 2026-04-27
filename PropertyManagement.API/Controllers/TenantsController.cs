@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
 using PropertyManagement.API.Data;
 using PropertyManagement.API.Models;
+using Microsoft.AspNetCore.Authorization;
+
 
 namespace PropertyManagement.API.Controllers
 {
@@ -17,6 +19,7 @@ namespace PropertyManagement.API.Controllers
             _context = context;
         }
 
+        [Authorize(Roles = "Admin,Staff")]
         [HttpGet]
         public async Task<ActionResult<IEnumerable<TenantDto>>> GetTenants()
         {
@@ -30,6 +33,7 @@ namespace PropertyManagement.API.Controllers
             return Ok(tenants.Select(MapTenant));
         }
 
+        [Authorize(Roles = "Admin,Staff")]
         [HttpGet("{id}")]
         public async Task<ActionResult<TenantDto>> GetTenant(int id)
         {
@@ -44,6 +48,7 @@ namespace PropertyManagement.API.Controllers
             return Ok(MapTenant(tenant));
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpPost]
         public async Task<ActionResult<TenantDto>> PostTenant(TenantUpsertRequest request)
         {
@@ -74,6 +79,7 @@ namespace PropertyManagement.API.Controllers
             return CreatedAtAction(nameof(GetTenant), new { id = tenant.TenantId }, MapTenant(createdTenant));
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpPut("{id}")]
         public async Task<ActionResult<TenantDto>> PutTenant(int id, TenantUpsertRequest request)
         {
@@ -115,6 +121,7 @@ namespace PropertyManagement.API.Controllers
             return Ok(MapTenant(updatedTenant));
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteTenant(int id)
         {

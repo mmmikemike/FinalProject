@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
@@ -10,6 +11,8 @@ namespace PropertyManagement.API.Controllers;
 [Route("api/[controller]")]
 public class MaintenanceProjectsController(AppDbContext dbContext) : ControllerBase
 {
+
+    [Authorize(Roles = "Admin,Contractor")]
     [HttpGet]
     public async Task<ActionResult<IEnumerable<MaintenanceProjectDto>>> GetMaintenanceProjects([FromQuery] int? propertyId = null, [FromQuery] string? status = null)
     {
@@ -37,6 +40,7 @@ public class MaintenanceProjectsController(AppDbContext dbContext) : ControllerB
         return Ok(projects.Select(MapProject));
     }
 
+    [Authorize(Roles = "Admin,Contractor")]
     [HttpGet("{id:int}")]
     public async Task<ActionResult<MaintenanceProjectDto>> GetMaintenanceProject(int id)
     {
@@ -49,6 +53,7 @@ public class MaintenanceProjectsController(AppDbContext dbContext) : ControllerB
         return project is null ? NotFound() : Ok(MapProject(project));
     }
 
+    [Authorize(Roles = "Admin,Contractor")]
     [HttpPost]
     public async Task<ActionResult<MaintenanceProjectDto>> CreateMaintenanceProject([FromBody] MaintenanceProjectUpsertRequest request)
     {
@@ -73,6 +78,7 @@ public class MaintenanceProjectsController(AppDbContext dbContext) : ControllerB
         return CreatedAtAction(nameof(GetMaintenanceProject), new { id = project.ProjectId }, await MapProjectAsync(project.ProjectId));
     }
 
+    [Authorize(Roles = "Admin,Contractor")]
     [HttpPut("{id:int}")]
     public async Task<ActionResult<MaintenanceProjectDto>> UpdateMaintenanceProject(int id, [FromBody] MaintenanceProjectUpsertRequest request)
     {
@@ -99,6 +105,7 @@ public class MaintenanceProjectsController(AppDbContext dbContext) : ControllerB
         return Ok(await MapProjectAsync(id));
     }
 
+    [Authorize(Roles = "Admin,Contractor")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteMaintenanceProject(int id)
     {

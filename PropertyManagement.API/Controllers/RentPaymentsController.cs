@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
@@ -10,6 +11,7 @@ namespace PropertyManagement.API.Controllers;
 [ApiController]
 public class RentPaymentsController(AppDbContext context) : ControllerBase
 {
+    [Authorize(Roles = "Admin,Staff,Tenant")]
     [HttpGet]
     public async Task<ActionResult<IEnumerable<RentPaymentDto>>> GetRentPayments([FromQuery] int? tenantId = null, [FromQuery] int? scheduleId = null)
     {
@@ -36,6 +38,7 @@ public class RentPaymentsController(AppDbContext context) : ControllerBase
         return Ok(payments.Select(MapPayment));
     }
 
+    [Authorize(Roles = "Admin,Staff,Tenant")]
     [HttpGet("{id:int}")]
     public async Task<ActionResult<RentPaymentDto>> GetRentPayment(int id)
     {
@@ -48,6 +51,7 @@ public class RentPaymentsController(AppDbContext context) : ControllerBase
         return payment is null ? NotFound() : Ok(MapPayment(payment));
     }
 
+    [Authorize(Roles = "Admin,Tenant")]
     [HttpPost]
     public async Task<ActionResult<RentPaymentDto>> PostRentPayment(RentPaymentUpsertRequest request)
     {
@@ -73,6 +77,7 @@ public class RentPaymentsController(AppDbContext context) : ControllerBase
         return CreatedAtAction(nameof(GetRentPayment), new { id = payment.PaymentId }, await MapPaymentAsync(payment.PaymentId));
     }
 
+    [Authorize(Roles = "Admin,Tenant")]
     [HttpPut("{id:int}")]
     public async Task<ActionResult<RentPaymentDto>> PutRentPayment(int id, RentPaymentUpsertRequest request)
     {
@@ -100,6 +105,7 @@ public class RentPaymentsController(AppDbContext context) : ControllerBase
         return Ok(await MapPaymentAsync(id));
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteRentPayment(int id)
     {
