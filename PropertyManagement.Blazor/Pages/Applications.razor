@@ -1,6 +1,7 @@
 @page "/applications"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Administrator,Staff")]
 @inject PropertyManagementApiClient ApiClient
+@inject AccessControlService AccessControl
 
 <PageTitle>Applications</PageTitle>
 
@@ -61,7 +62,9 @@
 </div>
 
 <div class="workspace-grid">
-    <section class="glass-panel">
+    @if (user.CanEditApplications)
+    {
+        <section class="glass-panel">
         <div class="section-header">
             <div>
                 <h3>@(editingApplicationId is null ? "Review application" : "Edit application")</h3>
@@ -154,6 +157,7 @@
             </div>
         </EditForm>
     </section>
+    }
 
     <section class="glass-panel">
         <div class="section-header">
@@ -182,7 +186,10 @@
                             <th>Status</th>
                             <th>Move-in</th>
                             <th>Submitted</th>
-                            <th class="text-end">Actions</th>
+                            @if (user.CanEditApplications)
+                            {
+                                <th class="text-end">Actions</th>
+                            }
                         </tr>
                     </thead>
                     <tbody>
@@ -197,10 +204,13 @@
                                 <td><span class="@application.StatusCssClass">@application.Status</span></td>
                                 <td>@application.PreferredMoveInDate.ToString("yyyy-MM-dd")</td>
                                 <td>@application.SubmittedAt.ToLocalTime().ToString("yyyy-MM-dd")</td>
-                                <td class="action-cell">
-                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEdit(application)">Open</button>
-                                    <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteApplicationAsync(application.ApplicationId)">Delete</button>
-                                </td>
+                                @if (user.CanEditApplications)
+                                {
+                                    <td class="action-cell">
+                                        <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEdit(application)">Open</button>
+                                        <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteApplicationAsync(application.ApplicationId)">Delete</button>
+                                    </td>
+                                }
                             </tr>
                         }
                     </tbody>
@@ -222,9 +232,11 @@
     private string? errorMessage;
     private string? selectedStatus;
     private int? selectedPropertyId;
+    private UserAccessProfile user = UserAccessProfile.Anonymous;
 
     protected override async Task OnInitializedAsync()
     {
+        user = await AccessControl.GetUserAsync();
         await LoadLookupsAsync();
         await LoadApplicationsAsync();
     }

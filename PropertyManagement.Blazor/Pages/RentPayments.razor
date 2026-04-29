@@ -1,6 +1,7 @@
 @page "/rent-payments"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Administrator,Staff,Tenant")]
 @inject PropertyManagementApiClient ApiClient
+@inject AccessControlService AccessControl
 
 <PageTitle>Rent Payments</PageTitle>
 
@@ -17,7 +18,9 @@
 }
 
 <div class="workspace-grid">
-    <section class="glass-panel">
+    @if (user.CanEditRentPayments)
+    {
+        <section class="glass-panel">
         <div class="section-header">
             <div>
                 <h3>@(editingPaymentId is null ? "Add payment" : "Edit payment")</h3>
@@ -72,6 +75,7 @@
             </div>
         </EditForm>
     </section>
+    }
 
     <section class="glass-panel">
         <div class="section-header">
@@ -100,7 +104,10 @@
                             <th>Amount</th>
                             <th>Method</th>
                             <th>Date</th>
-                            <th class="text-end">Actions</th>
+                            @if (user.CanEditRentPayments)
+                            {
+                                <th class="text-end">Actions</th>
+                            }
                         </tr>
                     </thead>
                     <tbody>
@@ -112,10 +119,13 @@
                                 <td>@payment.AmountPaid.ToString("C")</td>
                                 <td>@payment.PaymentMethod</td>
                                 <td>@payment.PaymentDate.ToString("yyyy-MM-dd")</td>
-                                <td class="action-cell">
-                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEdit(payment)">Edit</button>
-                                    <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeletePaymentAsync(payment.PaymentId)">Delete</button>
-                                </td>
+                                @if (user.CanEditRentPayments)
+                                {
+                                    <td class="action-cell">
+                                        <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEdit(payment)">Edit</button>
+                                        <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeletePaymentAsync(payment.PaymentId)">Delete</button>
+                                    </td>
+                                }
                             </tr>
                         }
                     </tbody>
@@ -135,9 +145,11 @@
     private bool isSaving;
     private int? editingPaymentId;
     private string? errorMessage;
+    private UserAccessProfile user = UserAccessProfile.Anonymous;
 
     protected override async Task OnInitializedAsync()
     {
+        user = await AccessControl.GetUserAsync();
         await LoadAsync();
     }
 
@@ -148,8 +160,9 @@
 
         try
         {
-            var schedulesTask = ApiClient.GetRentSchedulesAsync();
-            var paymentsTask = ApiClient.GetRentPaymentsAsync();
+            var tenantId = user.IsTenant ? user.TenantId : null;
+            var schedulesTask = ApiClient.GetRentSchedulesAsync(tenantId: tenantId);
+            var paymentsTask = ApiClient.GetRentPaymentsAsync(tenantId);
 
             await Task.WhenAll(schedulesTask, paymentsTask);
 

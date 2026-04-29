@@ -8,13 +8,17 @@
     <main>
         <div class="top-row px-4">
             <div>
-                <p class="eyebrow">Week-9-Shananigans</p>
+                <p class="eyebrow">FINALS WEEK OR MY FINAL WEEK</p>
                 <h2>Property Management Dashboard</h2>
             </div>
             <AuthorizeView>
                 <Authorized>
                     <div class="top-row-actions">
-                        <span class="top-row-note">API + Blazor WebAssembly</span>
+                        <div class="signed-in-user">
+                            <span>Signed in as</span>
+                            <strong>@context.User.Identity?.Name</strong>
+                            <span class="user-role">@context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value</span>
+                        </div>
                         <button class="btn btn-outline-primary" @onclick="LogOutAsync">Log out</button>
                     </div>
                 </Authorized>

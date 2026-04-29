@@ -1,6 +1,7 @@
 @page "/rent-records"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Administrator,Staff,Tenant")]
 @inject PropertyManagementApiClient ApiClient
+@inject AccessControlService AccessControl
 
 <PageTitle>Rent Records</PageTitle>
 
@@ -25,20 +26,23 @@
             </div>
         </div>
 
-        <div class="compact-grid">
-            <div>
-                <label class="form-label">Tenant</label>
-                <InputSelect class="form-select" @bind-Value="selectedTenantId">
-                    @foreach (var tenant in tenants)
-                    {
-                        <option value="@tenant.TenantId">@tenant.FullName</option>
-                    }
-                </InputSelect>
+        @if (!user.IsTenant)
+        {
+            <div class="compact-grid">
+                <div>
+                    <label class="form-label">Tenant</label>
+                    <InputSelect class="form-select" @bind-Value="selectedTenantId">
+                        @foreach (var tenant in tenants)
+                        {
+                            <option value="@tenant.TenantId">@tenant.FullName</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="align-end">
+                    <button class="btn btn-outline-primary" type="button" @onclick="LoadTenantLedgerAsync">Load ledger</button>
+                </div>
             </div>
-            <div class="align-end">
-                <button class="btn btn-outline-primary" type="button" @onclick="LoadTenantLedgerAsync">Load ledger</button>
-            </div>
-        </div>
+        }
 
         @if (tenantLedger is null)
         {
@@ -91,13 +95,15 @@
         }
     </section>
 
-    <section class="glass-panel">
-        <div class="section-header">
-            <div>
-                <h3>Property ledger</h3>
-                <p class="page-intro">Rollup of charges, collections, maintenance costs, and net income.</p>
+    @if (user.CanViewPropertyLedgers)
+    {
+        <section class="glass-panel">
+            <div class="section-header">
+                <div>
+                    <h3>Property ledger</h3>
+                    <p class="page-intro">Rollup of charges, collections, maintenance costs, and net income.</p>
+                </div>
             </div>
-        </div>
 
         <div class="compact-grid">
             <div>
@@ -163,7 +169,8 @@
                 </table>
             </div>
         }
-    </section>
+        </section>
+    }
 </div>
 
 @code {
@@ -174,25 +181,36 @@
     private int selectedTenantId;
     private int selectedPropertyId;
     private string? errorMessage;
+    private UserAccessProfile user = UserAccessProfile.Anonymous;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            var tenantsTask = ApiClient.GetTenantsAsync();
-            var propertiesTask = ApiClient.GetPropertiesAsync();
+            user = await AccessControl.GetUserAsync();
+            var tenantsTask = user.IsTenant
+                ? Task.FromResult(new List<TenantModel>())
+                : ApiClient.GetTenantsAsync();
+            var propertiesTask = user.CanViewPropertyLedgers
+                ? ApiClient.GetPropertiesAsync()
+                : Task.FromResult(new List<PropertyOption>());
             await Task.WhenAll(tenantsTask, propertiesTask);
 
             tenants = tenantsTask.Result;
             properties = propertiesTask.Result;
 
-            if (tenants.Count > 0)
+            if (user.IsTenant && user.TenantId.HasValue)
+            {
+                selectedTenantId = user.TenantId.Value;
+                await LoadTenantLedgerAsync();
+            }
+            else if (tenants.Count > 0)
             {
                 selectedTenantId = tenants[0].TenantId;
                 await LoadTenantLedgerAsync();
             }
 
-            if (properties.Count > 0)
+            if (user.CanViewPropertyLedgers && properties.Count > 0)
             {
                 selectedPropertyId = properties[0].PropertyId;
                 await LoadPropertyLedgerAsync();

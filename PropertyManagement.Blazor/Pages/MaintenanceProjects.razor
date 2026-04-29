@@ -1,6 +1,7 @@
 @page "/maintenance-projects"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Administrator,Staff,Contractor")]
 @inject PropertyManagementApiClient ApiClient
+@inject AccessControlService AccessControl
 
 <PageTitle>Maintenance Projects</PageTitle>
 
@@ -27,7 +28,9 @@
 </div>
 
 <div class="workspace-grid">
-    <section class="glass-panel">
+    @if (user.CanEditMaintenance)
+    {
+        <section class="glass-panel">
         <div class="section-header">
             <div>
                 <h3>@(editingProjectId is null ? "Add project" : "Edit project")</h3>
@@ -81,6 +84,7 @@
             </div>
         </EditForm>
     </section>
+    }
 
     <section class="glass-panel">
         <div class="section-header">
@@ -140,8 +144,11 @@
                                 <td>@project.LoggedHours.ToString("0.##")</td>
                                 <td class="action-cell">
                                     <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => SelectProject(project.ProjectId)">Logs</button>
-                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEditProject(project)">Edit</button>
-                                    <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteProjectAsync(project.ProjectId)">Delete</button>
+                                    @if (user.CanEditMaintenance)
+                                    {
+                                        <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEditProject(project)">Edit</button>
+                                        <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteProjectAsync(project.ProjectId)">Delete</button>
+                                    }
                                 </td>
                             </tr>
                         }
@@ -167,8 +174,10 @@
     else
     {
         <div class="workspace-grid">
-            <section>
-                <EditForm class="record-form" Model="workLogForm" OnValidSubmit="SaveWorkLogAsync">
+            @if (user.CanEditMaintenance)
+            {
+                <section>
+                    <EditForm class="record-form" Model="workLogForm" OnValidSubmit="SaveWorkLogAsync">
                     <DataAnnotationsValidator />
                     <ValidationSummary />
 
@@ -206,8 +215,9 @@
                         <button class="btn btn-primary" type="submit" disabled="@isSavingWorkLog">@(isSavingWorkLog ? "Saving..." : "Save work log")</button>
                         <button class="btn btn-outline-primary" type="button" @onclick="ResetWorkLogForm">Clear</button>
                     </div>
-                </EditForm>
-            </section>
+                    </EditForm>
+                </section>
+            }
 
             <section>
                 @if (isLoadingLogs)
@@ -228,7 +238,10 @@
                                     <th>Clock out</th>
                                     <th>GPS</th>
                                     <th>Hours</th>
-                                    <th class="text-end">Actions</th>
+                                    @if (user.CanEditMaintenance)
+                                    {
+                                        <th class="text-end">Actions</th>
+                                    }
                                 </tr>
                             </thead>
                             <tbody>
@@ -239,10 +252,13 @@
                                         <td>@(log.ClockOutTime?.ToString("yyyy-MM-dd") ?? "-")</td>
                                         <td>@log.GpsLocation</td>
                                         <td>@log.LoggedHours.ToString("0.##")</td>
-                                        <td class="action-cell">
-                                            <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEditWorkLog(log)">Edit</button>
-                                            <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteWorkLogAsync(log.LogId)">Delete</button>
-                                        </td>
+                                        @if (user.CanEditMaintenance)
+                                        {
+                                            <td class="action-cell">
+                                                <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEditWorkLog(log)">Edit</button>
+                                                <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteWorkLogAsync(log.LogId)">Delete</button>
+                                            </td>
+                                        }
                                     </tr>
                                 }
                             </tbody>
@@ -271,6 +287,7 @@
     private int? selectedProjectId;
     private string selectedProjectStatus = string.Empty;
     private string? errorMessage;
+    private UserAccessProfile user = UserAccessProfile.Anonymous;
 
     private string SelectedProjectLabel =>
         selectedProjectId is null
@@ -281,6 +298,7 @@
     {
         try
         {
+            user = await AccessControl.GetUserAsync();
             properties = await ApiClient.GetPropertiesAsync();
             await LoadProjectsAsync();
         }

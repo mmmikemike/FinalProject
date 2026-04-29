@@ -48,6 +48,28 @@ main {
     color: #36626d;
 }
 
+.signed-in-user {
+    display: grid;
+    gap: 0.05rem;
+    text-align: right;
+    color: #36626d;
+    line-height: 1.1;
+}
+
+.signed-in-user span {
+    font-size: 0.74rem;
+}
+
+.signed-in-user strong {
+    color: #123c69;
+    font-size: 0.95rem;
+}
+
+.signed-in-user .user-role {
+    color: #5b7c99;
+    font-weight: 600;
+}
+
 @media (max-width: 640.98px) {
     .top-row {
         align-items: flex-start;
@@ -58,6 +80,10 @@ main {
     .top-row-actions {
         width: 100%;
         justify-content: space-between;
+    }
+
+    .signed-in-user {
+        text-align: left;
     }
 }
 

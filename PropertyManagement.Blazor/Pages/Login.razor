@@ -4,14 +4,14 @@
 @inject SimpleAuthStateProvider AuthStateProvider
 @inject NavigationManager NavigationManager
 
-<PageTitle>Admin Login</PageTitle>
+<PageTitle>Login</PageTitle>
 
 <div class="login-shell">
     <section class="login-card">
         <div class="login-copy">
-            <p class="login-eyebrow">Property Management Admin</p>
-            <h1>Secure admin access</h1>
-            <p class="page-intro">Sign in to manage properties, tenants, rent workflows, maintenance, and invoices.</p>
+            <p class="login-eyebrow">Property Management Portal</p>
+            <h1>Secure role access</h1>
+            <p class="page-intro">Sign in as an admin, staff member, contractor, or tenant to see the right workspace.</p>
         </div>
 
         <EditForm Model="form" OnValidSubmit="HandleLoginAsync">
@@ -36,8 +36,10 @@
         </EditForm>
 
         <div class="login-footer">
-            <span>Username: <strong>ADMIN</strong></span>
-            <span>Password: <strong>ADMIN</strong></span>
+            <span><strong>ADMIN</strong> / ADMIN</span>
+            <span><strong>STAFF</strong> / STAFF</span>
+            <span><strong>CONTRACTOR</strong> / CONTRACTOR</span>
+            <span><strong>TENANT1/2/3/4/5/6</strong> / TENANT1/2/3/4/5/6</span>
         </div>
     </section>
 </div>

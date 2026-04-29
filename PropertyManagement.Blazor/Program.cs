@@ -17,6 +17,7 @@ builder.Services.AddScoped(_ => new HttpClient
 builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<SimpleAuthStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(provider => provider.GetRequiredService<SimpleAuthStateProvider>());
+builder.Services.AddScoped<AccessControlService>();
 builder.Services.AddScoped<PropertyManagementApiClient>();
 
 await builder.Build().RunAsync();

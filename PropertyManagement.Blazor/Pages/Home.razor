@@ -1,13 +1,14 @@
 @page "/"
 @attribute [Authorize]
 @inject PropertyManagementApiClient ApiClient
+@inject AccessControlService AccessControl
 
 <PageTitle>Dashboard</PageTitle>
 
 <div class="page-header">
     <div>
-        <h1>Admin dashboard</h1>
-        <p class="page-intro">One workspace for portfolio health, rent follow-up, maintenance oversight, and invoice tracking.</p>
+        <h1>@DashboardTitle</h1>
+        <p class="page-intro">Your role controls which records appear here and which workflows can be edited.</p>
     </div>
 </div>
 
@@ -22,40 +23,60 @@ else if (isLoading)
 else
 {
     <div class="dashboard-grid dashboard-grid-wide">
-        <section class="stat-card">
-            <span class="stat-label">Properties</span>
-            <strong>@properties.Count</strong>
-            <p>Active units tracked across the portfolio.</p>
-        </section>
-        <section class="stat-card">
-            <span class="stat-label">Tenants</span>
-            <strong>@tenants.Count</strong>
-            <p>Resident records connected to current units.</p>
-        </section>
-        <section class="stat-card">
-            <span class="stat-label">Outstanding rent</span>
-            <strong>@outstandingRent.ToString("C0")</strong>
-            <p>@delinquentSchedules.Count schedules still need follow-up.</p>
-        </section>
-        <section class="stat-card">
-            <span class="stat-label">Open projects</span>
-            <strong>@openProjects.Count</strong>
-            <p>Maintenance jobs not yet closed.</p>
-        </section>
-        <section class="stat-card">
-            <span class="stat-label">Overdue invoices</span>
-            <strong>@overdueInvoices.Count</strong>
-            <p>@invoicePipeline.ToString("C0") in draft, sent, or overdue invoices.</p>
-        </section>
-        <section class="stat-card">
-            <span class="stat-label">New applications</span>
-            <strong>@applications.Count(item => item.Status == "New")</strong>
-            <p>@applications.Count total leasing inquiries received from the public site.</p>
-        </section>
+        @if (user.CanViewProperties)
+        {
+            <section class="stat-card">
+                <span class="stat-label">Properties</span>
+                <strong>@properties.Count</strong>
+                <p>Active units tracked across the portfolio.</p>
+            </section>
+        }
+        @if (user.CanViewTenants)
+        {
+            <section class="stat-card">
+                <span class="stat-label">Tenants</span>
+                <strong>@tenants.Count</strong>
+                <p>Resident records connected to current units.</p>
+            </section>
+        }
+        @if (user.CanViewRentSchedules)
+        {
+            <section class="stat-card">
+                <span class="stat-label">Outstanding rent</span>
+                <strong>@outstandingRent.ToString("C0")</strong>
+                <p>@delinquentSchedules.Count schedules still need follow-up.</p>
+            </section>
+        }
+        @if (user.CanViewMaintenance)
+        {
+            <section class="stat-card">
+                <span class="stat-label">Open projects</span>
+                <strong>@openProjects.Count</strong>
+                <p>Maintenance jobs not yet closed.</p>
+            </section>
+        }
+        @if (user.CanViewInvoices)
+        {
+            <section class="stat-card">
+                <span class="stat-label">Overdue invoices</span>
+                <strong>@overdueInvoices.Count</strong>
+                <p>@invoicePipeline.ToString("C0") in draft, sent, or overdue invoices.</p>
+            </section>
+        }
+        @if (user.CanViewApplications)
+        {
+            <section class="stat-card">
+                <span class="stat-label">New applications</span>
+                <strong>@applications.Count(item => item.Status == "New")</strong>
+                <p>@applications.Count total leasing inquiries received from the public site.</p>
+            </section>
+        }
     </div>
 
     <div class="panel-grid admin-board">
-        <section class="glass-panel panel-span-2">
+        @if (user.CanViewRentSchedules)
+        {
+            <section class="glass-panel panel-span-2">
             <div class="section-header">
                 <div>
                     <h3>Rent follow-up queue</h3>
@@ -94,9 +115,12 @@ else
                     </table>
                 </div>
             }
-        </section>
+            </section>
+        }
 
-        <section class="glass-panel">
+        @if (user.CanViewMaintenance)
+        {
+            <section class="glass-panel">
             <div class="section-header">
                 <div>
                     <h3>Maintenance snapshot</h3>
@@ -127,9 +151,12 @@ else
                     <span class="@project.StatusCssClass">@project.Status</span>
                 </div>
             }
-        </section>
+            </section>
+        }
 
-        <section class="glass-panel">
+        @if (user.CanViewInvoices)
+        {
+            <section class="glass-panel">
             <div class="section-header">
                 <div>
                     <h3>Invoice watchlist</h3>
@@ -151,9 +178,12 @@ else
                     </div>
                 </div>
             }
-        </section>
+            </section>
+        }
 
-        <section class="glass-panel">
+        @if (user.CanViewApplications)
+        {
+            <section class="glass-panel">
             <div class="section-header">
                 <div>
                     <h3>Leasing pipeline</h3>
@@ -182,7 +212,8 @@ else
                     </div>
                 }
             }
-        </section>
+            </section>
+        }
 
         <section class="glass-panel panel-span-2">
             <div class="section-header">
@@ -193,26 +224,41 @@ else
             </div>
 
             <div class="shortcut-grid">
-                <a class="shortcut-card" href="properties">
-                    <strong>Properties</strong>
-                    <p>Maintain unit records, monthly rent, and occupancy context.</p>
-                </a>
-                <a class="shortcut-card" href="rent-records">
-                    <strong>Rent records</strong>
-                    <p>Review tenant ledgers and property-level financial rollups.</p>
-                </a>
-                <a class="shortcut-card" href="maintenance-projects">
-                    <strong>Maintenance</strong>
-                    <p>Track bid-to-close projects plus proof-based work logs.</p>
-                </a>
-                <a class="shortcut-card" href="invoices">
-                    <strong>Invoices</strong>
-                    <p>Manage billing pipeline across rent and maintenance workflows.</p>
-                </a>
-                <a class="shortcut-card" href="applications">
-                    <strong>Applications</strong>
-                    <p>Review public leasing applications and keep the pipeline moving.</p>
-                </a>
+                @if (user.CanViewProperties)
+                {
+                    <a class="shortcut-card" href="properties">
+                        <strong>Properties</strong>
+                        <p>Maintain unit records, monthly rent, and occupancy context.</p>
+                    </a>
+                }
+                @if (user.CanViewRentRecords)
+                {
+                    <a class="shortcut-card" href="rent-records">
+                        <strong>Rent records</strong>
+                        <p>Review tenant ledgers and property-level financial rollups.</p>
+                    </a>
+                }
+                @if (user.CanViewMaintenance)
+                {
+                    <a class="shortcut-card" href="maintenance-projects">
+                        <strong>Maintenance</strong>
+                        <p>Track bid-to-close projects plus proof-based work logs.</p>
+                    </a>
+                }
+                @if (user.CanViewInvoices)
+                {
+                    <a class="shortcut-card" href="invoices">
+                        <strong>Invoices</strong>
+                        <p>Manage billing pipeline across rent and maintenance workflows.</p>
+                    </a>
+                }
+                @if (user.CanViewApplications)
+                {
+                    <a class="shortcut-card" href="applications">
+                        <strong>Applications</strong>
+                        <p>Review public leasing applications and keep the pipeline moving.</p>
+                    </a>
+                }
             </div>
         </section>
     </div>
@@ -227,6 +273,7 @@ else
     private List<MaintenanceProjectModel> projects = [];
     private List<InvoiceModel> invoices = [];
     private List<PropertyApplicationModel> applications = [];
+    private UserAccessProfile user = UserAccessProfile.Anonymous;
 
     private decimal outstandingRent;
     private decimal invoicePipeline;
@@ -234,26 +281,54 @@ else
     private List<MaintenanceProjectModel> openProjects = [];
     private Dictionary<string, int> projectStatusBreakdown = new();
     private List<InvoiceModel> overdueInvoices = [];
+    private string DashboardTitle => user.Role switch
+    {
+        AccessControlService.TenantRole => "Tenant dashboard",
+        AccessControlService.ContractorRole => "Contractor dashboard",
+        AccessControlService.StaffRole => "Staff dashboard",
+        _ => "Admin dashboard"
+    };
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            var propertiesTask = ApiClient.GetPropertiesAsync();
-            var tenantsTask = ApiClient.GetTenantsAsync();
-            var schedulesTask = ApiClient.GetRentSchedulesAsync();
-            var projectsTask = ApiClient.GetMaintenanceProjectsAsync();
-            var invoicesTask = ApiClient.GetInvoicesAsync();
-            var applicationsTask = ApiClient.GetPropertyApplicationsAsync();
+            user = await AccessControl.GetUserAsync();
+            var tenantId = user.IsTenant ? user.TenantId : null;
 
-            await Task.WhenAll(propertiesTask, tenantsTask, schedulesTask, projectsTask, invoicesTask, applicationsTask);
+            if (user.CanViewProperties)
+            {
+                properties = await ApiClient.GetPropertiesAsync();
+            }
 
-            properties = propertiesTask.Result;
-            tenants = tenantsTask.Result;
-            schedules = schedulesTask.Result;
-            projects = projectsTask.Result;
-            invoices = invoicesTask.Result;
-            applications = applicationsTask.Result;
+            if (user.CanViewTenants)
+            {
+                tenants = await ApiClient.GetTenantsAsync();
+            }
+
+            if (user.CanViewRentSchedules)
+            {
+                schedules = await ApiClient.GetRentSchedulesAsync(tenantId: tenantId);
+            }
+
+            if (user.CanViewMaintenance)
+            {
+                projects = await ApiClient.GetMaintenanceProjectsAsync();
+            }
+
+            if (user.CanViewInvoices)
+            {
+                invoices = await ApiClient.GetInvoicesAsync(tenantId: tenantId);
+                if (user.IsContractor)
+                {
+                    invoices = invoices.Where(invoice => invoice.ProjectId.HasValue).ToList();
+                }
+            }
+
+            if (user.CanViewApplications)
+            {
+                applications = await ApiClient.GetPropertyApplicationsAsync();
+            }
 
             outstandingRent = schedules.Sum(schedule => Math.Max(0m, schedule.TotalDue - schedule.TotalPaid));
             delinquentSchedules = schedules

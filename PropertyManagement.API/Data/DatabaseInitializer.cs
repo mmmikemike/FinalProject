@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 
 namespace PropertyManagement.API.Data;
 
@@ -6,6 +7,7 @@ public static class DatabaseInitializer
 {
     public static async Task InitializeAsync(AppDbContext dbContext)
     {
+        await EnsureDatabaseExistsAsync(dbContext);
         await dbContext.Database.OpenConnectionAsync();
 
         try
@@ -297,5 +299,34 @@ public static class DatabaseInitializer
         {
             await dbContext.Database.CloseConnectionAsync();
         }
+    }
+
+    private static async Task EnsureDatabaseExistsAsync(AppDbContext dbContext)
+    {
+        var connectionString = dbContext.Database.GetDbConnection().ConnectionString;
+        var builder = new SqlConnectionStringBuilder(connectionString);
+        var databaseName = builder.InitialCatalog;
+
+        if (string.IsNullOrWhiteSpace(databaseName))
+        {
+            return;
+        }
+
+        builder.InitialCatalog = "master";
+
+        await using var connection = new SqlConnection(builder.ConnectionString);
+        await connection.OpenAsync();
+
+        var escapedDatabaseName = databaseName.Replace("]", "]]");
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            IF DB_ID(@databaseName) IS NULL
+            BEGIN
+                EXEC('CREATE DATABASE [{escapedDatabaseName}]');
+            END;
+            """;
+        command.Parameters.AddWithValue("@databaseName", databaseName);
+
+        await command.ExecuteNonQueryAsync();
     }
 }

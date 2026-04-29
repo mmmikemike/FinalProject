@@ -5,6 +5,7 @@ public class InvoiceModel
     public int InvoiceId { get; set; }
     public int? ProjectId { get; set; }
     public int? ScheduleId { get; set; }
+    public int? TenantId { get; set; }
     public DateTime InvoiceDate { get; set; }
     public decimal TotalAmount { get; set; }
     public string Status { get; set; } = string.Empty;

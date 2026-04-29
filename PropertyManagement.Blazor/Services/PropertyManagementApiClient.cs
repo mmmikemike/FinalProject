@@ -165,13 +165,14 @@ public class PropertyManagementApiClient(HttpClient httpClient)
         await EnsureSuccessAsync(response);
     }
 
-    public async Task<List<InvoiceModel>> GetInvoicesAsync(string? status = null, int? projectId = null, int? scheduleId = null)
+    public async Task<List<InvoiceModel>> GetInvoicesAsync(string? status = null, int? projectId = null, int? scheduleId = null, int? tenantId = null)
     {
         var endpoint = BuildQuery(
             "api/invoices",
             ("status", status),
             ("projectId", projectId?.ToString()),
-            ("scheduleId", scheduleId?.ToString()));
+            ("scheduleId", scheduleId?.ToString()),
+            ("tenantId", tenantId?.ToString()));
 
         return await httpClient.GetFromJsonAsync<List<InvoiceModel>>(endpoint) ?? [];
     }

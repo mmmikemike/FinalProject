@@ -4,6 +4,7 @@ public record InvoiceDto(
     int InvoiceId,
     int? ProjectId,
     int? ScheduleId,
+    int? TenantId,
     DateTime InvoiceDate,
     decimal TotalAmount,
     string Status,

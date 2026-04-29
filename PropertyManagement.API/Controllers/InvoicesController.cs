@@ -11,7 +11,7 @@ namespace PropertyManagement.API.Controllers;
 public class InvoicesController(AppDbContext dbContext) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<InvoiceDto>>> GetInvoices([FromQuery] string? status = null, [FromQuery] int? projectId = null, [FromQuery] int? scheduleId = null)
+    public async Task<ActionResult<IEnumerable<InvoiceDto>>> GetInvoices([FromQuery] string? status = null, [FromQuery] int? projectId = null, [FromQuery] int? scheduleId = null, [FromQuery] int? tenantId = null)
     {
         var query = dbContext.Invoices
             .AsNoTracking()
@@ -35,6 +35,11 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
         if (scheduleId.HasValue)
         {
             query = query.Where(invoice => invoice.ScheduleId == scheduleId.Value);
+        }
+
+        if (tenantId.HasValue)
+        {
+            query = query.Where(invoice => invoice.Schedule != null && invoice.Schedule.TenantId == tenantId.Value);
         }
 
         var invoices = await query
@@ -179,6 +184,7 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
             invoice.InvoiceId,
             invoice.ProjectId,
             invoice.ScheduleId,
+            invoice.Schedule?.TenantId,
             invoice.InvoiceDate,
             invoice.TotalAmount,
             invoice.Status,

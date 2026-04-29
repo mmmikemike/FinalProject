@@ -1,3 +1,5 @@
+@inject AccessControlService AccessControl
+
 <AuthorizeView>
     <Authorized>
         <div class="top-row ps-3 navbar navbar-dark">
@@ -16,46 +18,70 @@
                         <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Dashboard
                     </NavLink>
                 </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="properties">
-                        <span class="bi bi-building-nav-menu" aria-hidden="true"></span> Properties
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="tenants">
-                        <span class="bi bi-people-nav-menu" aria-hidden="true"></span> Tenants
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="rent-schedules">
-                        <span class="bi bi-calendar-nav-menu" aria-hidden="true"></span> Rent Schedules
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="rent-payments">
-                        <span class="bi bi-credit-card-nav-menu" aria-hidden="true"></span> Rent Payments
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="rent-records">
-                        <span class="bi bi-ledger-nav-menu" aria-hidden="true"></span> Rent Records
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="maintenance-projects">
-                        <span class="bi bi-tools-nav-menu" aria-hidden="true"></span> Maintenance
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="invoices">
-                        <span class="bi bi-receipt-nav-menu" aria-hidden="true"></span> Invoices
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="applications">
-                        <span class="bi bi-clipboard-nav-menu" aria-hidden="true"></span> Applications
-                    </NavLink>
-                </div>
+                @if (user.CanViewProperties)
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="properties">
+                            <span class="bi bi-building-nav-menu" aria-hidden="true"></span> Properties
+                        </NavLink>
+                    </div>
+                }
+                @if (user.CanViewTenants)
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="tenants">
+                            <span class="bi bi-people-nav-menu" aria-hidden="true"></span> Tenants
+                        </NavLink>
+                    </div>
+                }
+                @if (user.CanViewRentSchedules)
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="rent-schedules">
+                            <span class="bi bi-calendar-nav-menu" aria-hidden="true"></span> Rent Schedules
+                        </NavLink>
+                    </div>
+                }
+                @if (user.CanViewRentPayments)
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="rent-payments">
+                            <span class="bi bi-credit-card-nav-menu" aria-hidden="true"></span> Rent Payments
+                        </NavLink>
+                    </div>
+                }
+                @if (user.CanViewRentRecords)
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="rent-records">
+                            <span class="bi bi-ledger-nav-menu" aria-hidden="true"></span> Rent Records
+                        </NavLink>
+                    </div>
+                }
+                @if (user.CanViewMaintenance)
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="maintenance-projects">
+                            <span class="bi bi-tools-nav-menu" aria-hidden="true"></span> Maintenance
+                        </NavLink>
+                    </div>
+                }
+                @if (user.CanViewInvoices)
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="invoices">
+                            <span class="bi bi-receipt-nav-menu" aria-hidden="true"></span> Invoices
+                        </NavLink>
+                    </div>
+                }
+                @if (user.CanViewApplications)
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="applications">
+                            <span class="bi bi-clipboard-nav-menu" aria-hidden="true"></span> Applications
+                        </NavLink>
+                    </div>
+                }
             </nav>
         </div>
     </Authorized>
@@ -63,8 +89,14 @@
 
 @code {
     private bool collapseNavMenu = true;
+    private UserAccessProfile user = UserAccessProfile.Anonymous;
 
     private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await AccessControl.GetUserAsync();
+    }
 
     private void ToggleNavMenu()
     {
