@@ -17,4 +17,6 @@ public class InvoiceUpsertRequest
     public string Status { get; set; } = "Draft";
 
     public bool IsExported { get; set; }
+
+    public List<InvoiceLineItemUpsertRequest> LineItems { get; set; } = [];
 }

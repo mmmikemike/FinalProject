@@ -20,6 +20,7 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
             .Include(invoice => invoice.Schedule)
             .ThenInclude(schedule => schedule!.Tenant)
             .ThenInclude(tenant => tenant!.Property)
+            .Include(invoice => invoice.LineItems)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status))
@@ -59,6 +60,7 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
             .Include(item => item.Schedule)
             .ThenInclude(schedule => schedule!.Tenant)
             .ThenInclude(tenant => tenant!.Property)
+            .Include(item => item.LineItems)
             .FirstOrDefaultAsync(item => item.InvoiceId == id);
 
         return invoice is null ? NotFound() : Ok(MapInvoice(invoice));
@@ -73,14 +75,16 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
             return validationResult;
         }
 
+        var lineItems = NormalizeLineItems(request);
         var invoice = new Invoice
         {
             ProjectId = request.ProjectId,
             ScheduleId = request.ScheduleId,
             InvoiceDate = request.InvoiceDate,
-            TotalAmount = request.TotalAmount,
+            TotalAmount = CalculateTotal(request, lineItems),
             Status = request.Status.Trim(),
-            IsExported = request.IsExported
+            IsExported = request.IsExported,
+            LineItems = lineItems
         };
 
         dbContext.Invoices.Add(invoice);
@@ -107,9 +111,14 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
         invoice.ProjectId = request.ProjectId;
         invoice.ScheduleId = request.ScheduleId;
         invoice.InvoiceDate = request.InvoiceDate;
-        invoice.TotalAmount = request.TotalAmount;
+        var lineItems = NormalizeLineItems(request);
+        invoice.TotalAmount = CalculateTotal(request, lineItems);
         invoice.Status = request.Status.Trim();
         invoice.IsExported = request.IsExported;
+
+        var existingLineItems = dbContext.InvoiceLineItems.Where(item => item.InvoiceId == id);
+        dbContext.InvoiceLineItems.RemoveRange(existingLineItems);
+        invoice.LineItems = lineItems;
 
         await dbContext.SaveChangesAsync();
 
@@ -157,6 +166,7 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
             .Include(item => item.Schedule)
             .ThenInclude(schedule => schedule!.Tenant)
             .ThenInclude(tenant => tenant!.Property)
+            .Include(item => item.LineItems)
             .FirstAsync(item => item.InvoiceId == id);
 
         return MapInvoice(invoice);
@@ -180,6 +190,18 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
             ? $"{invoice.Schedule.Tenant.FirstName} {invoice.Schedule.Tenant.LastName}"
             : invoice.Project?.AssignedVendor ?? "Internal";
 
+        var lineItems = invoice.LineItems
+            .OrderBy(item => item.LineItemId)
+            .Select(item => new InvoiceLineItemDto(
+                item.LineItemId,
+                item.InvoiceId,
+                item.Description,
+                item.ItemType,
+                item.Quantity,
+                item.UnitPrice,
+                item.LineTotal))
+            .ToList();
+
         return new InvoiceDto(
             invoice.InvoiceId,
             invoice.ProjectId,
@@ -191,6 +213,33 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
             invoice.IsExported,
             referenceName,
             propertyName,
-            customerName);
+            customerName,
+            lineItems);
+    }
+
+    private static List<InvoiceLineItem> NormalizeLineItems(InvoiceUpsertRequest request)
+    {
+        if (request.LineItems.Count == 0)
+        {
+            return [];
+        }
+
+        return request.LineItems
+            .Where(item => !string.IsNullOrWhiteSpace(item.Description) && item.Quantity > 0)
+            .Select(item => new InvoiceLineItem
+            {
+                Description = item.Description.Trim(),
+                ItemType = string.IsNullOrWhiteSpace(item.ItemType) ? "Labor" : item.ItemType.Trim(),
+                Quantity = item.Quantity,
+                UnitPrice = item.UnitPrice
+            })
+            .ToList();
+    }
+
+    private static decimal CalculateTotal(InvoiceUpsertRequest request, IReadOnlyCollection<InvoiceLineItem> lineItems)
+    {
+        return lineItems.Count == 0
+            ? request.TotalAmount
+            : lineItems.Sum(item => item.Quantity * item.UnitPrice);
     }
 }

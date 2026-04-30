@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "Administrator,Staff,Tenant")]
 @inject PropertyManagementApiClient ApiClient
 @inject AccessControlService AccessControl
+@inject Microsoft.JSInterop.IJSRuntime JsRuntime
 
 <PageTitle>Rent Records</PageTitle>
 
@@ -38,9 +39,9 @@
                         }
                     </InputSelect>
                 </div>
-                <div class="align-end">
-                    <button class="btn btn-outline-primary" type="button" @onclick="LoadTenantLedgerAsync">Load ledger</button>
-                </div>
+            <div class="align-end">
+                <button class="btn btn-outline-primary" type="button" @onclick="LoadTenantLedgerAsync">Load ledger</button>
+            </div>
             </div>
         }
 
@@ -63,6 +64,10 @@
                     <span>Current balance</span>
                     <strong>@tenantLedger.CurrentBalance.ToString("C")</strong>
                 </div>
+            </div>
+
+            <div class="form-actions mt-3">
+                <button class="btn btn-outline-primary" type="button" @onclick="ExportTenantLedgerAsync">Export tenant CSV</button>
             </div>
 
             <div class="table-responsive mt-3">
@@ -143,6 +148,10 @@
                     <span class="stat-label">Net income</span>
                     <strong>@propertyLedger.NetIncome.ToString("C0")</strong>
                 </section>
+            </div>
+
+            <div class="form-actions mt-3">
+                <button class="btn btn-outline-primary" type="button" @onclick="ExportPropertyLedgerAsync">Export property CSV</button>
             </div>
 
             <div class="table-responsive mt-3">
@@ -256,5 +265,76 @@
         {
             errorMessage = ex.Message;
         }
+    }
+
+    private async Task ExportTenantLedgerAsync()
+    {
+        if (tenantLedger is null)
+        {
+            return;
+        }
+
+        var rows = new List<string>
+        {
+            "Tenant,Property,Date,Type,Description,Charge,Payment,RunningBalance"
+        };
+
+        rows.AddRange(tenantLedger.Entries.Select(entry =>
+            string.Join(",",
+                EscapeCsv(tenantLedger.TenantName),
+                EscapeCsv(tenantLedger.PropertyName),
+                EscapeCsv(entry.EntryDate.ToString("yyyy-MM-dd")),
+                EscapeCsv(entry.EntryType),
+                EscapeCsv(entry.Description),
+                entry.ChargeAmount.ToString("0.00"),
+                entry.PaymentAmount.ToString("0.00"),
+                entry.RunningBalance.ToString("0.00"))));
+
+        await JsRuntime.InvokeVoidAsync(
+            "pmDownloads.downloadText",
+            $"tenant-ledger-{tenantLedger.TenantId}-{DateTime.Today:yyyyMMdd}.csv",
+            "text/csv;charset=utf-8",
+            string.Join(Environment.NewLine, rows));
+    }
+
+    private async Task ExportPropertyLedgerAsync()
+    {
+        if (propertyLedger is null || !user.CanViewPropertyLedgers)
+        {
+            return;
+        }
+
+        var rows = new List<string>
+        {
+            "Property,Address,Tenant,Charges,Collected,Balance"
+        };
+
+        rows.AddRange(propertyLedger.TenantBalances.Select(balance =>
+            string.Join(",",
+                EscapeCsv(propertyLedger.PropertyName),
+                EscapeCsv(propertyLedger.Address),
+                EscapeCsv(balance.TenantName),
+                balance.Charges.ToString("0.00"),
+                balance.Collected.ToString("0.00"),
+                balance.OutstandingBalance.ToString("0.00"))));
+
+        rows.Add(string.Join(",",
+            EscapeCsv(propertyLedger.PropertyName),
+            EscapeCsv(propertyLedger.Address),
+            EscapeCsv("Totals"),
+            propertyLedger.TotalRentCharged.ToString("0.00"),
+            propertyLedger.TotalCollected.ToString("0.00"),
+            propertyLedger.OutstandingBalance.ToString("0.00")));
+
+        await JsRuntime.InvokeVoidAsync(
+            "pmDownloads.downloadText",
+            $"property-ledger-{propertyLedger.PropertyId}-{DateTime.Today:yyyyMMdd}.csv",
+            "text/csv;charset=utf-8",
+            string.Join(Environment.NewLine, rows));
+    }
+
+    private static string EscapeCsv(string value)
+    {
+        return "\"" + value.Replace("\"", "\"\"") + "\"";
     }
 }

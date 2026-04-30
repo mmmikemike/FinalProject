@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "Administrator,Staff,Contractor,Tenant")]
 @inject PropertyManagementApiClient ApiClient
 @inject AccessControlService AccessControl
+@inject Microsoft.JSInterop.IJSRuntime JsRuntime
 
 <PageTitle>Invoices</PageTitle>
 
@@ -83,7 +84,58 @@
 
             <div class="mb-3">
                 <label class="form-label">Total amount</label>
-                <InputNumber class="form-control" @bind-Value="form.TotalAmount" />
+                <InputNumber class="form-control" @bind-Value="form.TotalAmount" disabled="@(form.LineItems.Count > 0)" />
+                @if (form.LineItems.Count > 0)
+                {
+                    <div class="form-text">Calculated from line items: @form.LineItemsTotal.ToString("C")</div>
+                }
+            </div>
+
+            <div class="mb-3">
+                <div class="section-header compact-section-header">
+                    <div>
+                        <h3>Line items</h3>
+                        <p class="page-intro">Add labor, material, rent, tax, or fee rows for a clearer invoice total.</p>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick="AddLineItem">Add line</button>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th>Type</th>
+                                <th>Qty</th>
+                                <th>Unit price</th>
+                                <th>Total</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in form.LineItems)
+                            {
+                                <tr>
+                                    <td><InputText class="form-control" @bind-Value="item.Description" /></td>
+                                    <td>
+                                        <InputSelect class="form-select" @bind-Value="item.ItemType">
+                                            @foreach (var type in lineItemTypes)
+                                            {
+                                                <option value="@type">@type</option>
+                                            }
+                                        </InputSelect>
+                                    </td>
+                                    <td><InputNumber class="form-control" @bind-Value="item.Quantity" /></td>
+                                    <td><InputNumber class="form-control" @bind-Value="item.UnitPrice" /></td>
+                                    <td>@item.LineTotal.ToString("C")</td>
+                                    <td class="action-cell">
+                                        <button class="btn btn-sm btn-danger" type="button" disabled="@(form.LineItems.Count == 1)" @onclick="() => RemoveLineItem(item)">Remove</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <div class="mb-3">
@@ -129,6 +181,7 @@
                 </InputSelect>
             </div>
             <button class="btn btn-outline-primary" type="button" @onclick="LoadAsync">Apply</button>
+            <button class="btn btn-outline-primary" type="button" @onclick="ExportInvoicesAsync">Export CSV</button>
         </div>
 
         @if (isLoading)
@@ -163,6 +216,10 @@
                                 <td>
                                     <div>@invoice.ReferenceName</div>
                                     <small class="text-muted">@invoice.InvoiceDate.ToString("yyyy-MM-dd")</small>
+                                    @if (invoice.LineItems.Count > 0)
+                                    {
+                                        <div class="mini-note">@invoice.LineItems.Count line item@(invoice.LineItems.Count == 1 ? string.Empty : "s")</div>
+                                    }
                                 </td>
                                 <td>@invoice.CustomerName</td>
                                 <td>@invoice.PropertyName</td>
@@ -186,6 +243,7 @@
 
 @code {
     private static readonly string[] invoiceStatuses = ["Draft", "Sent", "Paid", "Overdue"];
+    private static readonly string[] lineItemTypes = ["Labor", "Material", "Rent", "Fee", "Tax", "Other"];
 
     private List<InvoiceModel> invoices = [];
     private List<MaintenanceProjectModel> projects = [];
@@ -251,6 +309,7 @@
             form.ScheduleId = null;
         }
 
+        PrepareInvoiceTotal();
         isSaving = true;
         errorMessage = null;
 
@@ -308,5 +367,65 @@
         form = new InvoiceFormModel();
         editingInvoiceId = null;
         errorMessage = null;
+    }
+
+    private void AddLineItem()
+    {
+        form.LineItems.Add(new InvoiceLineItemFormModel());
+        PrepareInvoiceTotal();
+    }
+
+    private void RemoveLineItem(InvoiceLineItemFormModel item)
+    {
+        if (form.LineItems.Count <= 1)
+        {
+            return;
+        }
+
+        form.LineItems.Remove(item);
+        PrepareInvoiceTotal();
+    }
+
+    private void PrepareInvoiceTotal()
+    {
+        var populatedLineItems = form.LineItems
+            .Where(item => !string.IsNullOrWhiteSpace(item.Description) && item.Quantity > 0)
+            .ToList();
+
+        if (populatedLineItems.Count > 0)
+        {
+            form.TotalAmount = populatedLineItems.Sum(item => item.LineTotal);
+        }
+    }
+
+    private async Task ExportInvoicesAsync()
+    {
+        var rows = new List<string>
+        {
+            "InvoiceId,Date,Reference,Customer,Property,Status,Amount,Exported,LineItems"
+        };
+
+        rows.AddRange(invoices.Select(invoice =>
+            string.Join(",",
+                invoice.InvoiceId,
+                EscapeCsv(invoice.InvoiceDate.ToString("yyyy-MM-dd")),
+                EscapeCsv(invoice.ReferenceName),
+                EscapeCsv(invoice.CustomerName),
+                EscapeCsv(invoice.PropertyName),
+                EscapeCsv(invoice.Status),
+                invoice.TotalAmount.ToString("0.00"),
+                invoice.IsExported ? "Yes" : "No",
+                EscapeCsv(string.Join(" | ", invoice.LineItems.Select(item => $"{item.Description}: {item.LineTotal:C}"))))));
+
+        await JsRuntime.InvokeVoidAsync(
+            "pmDownloads.downloadText",
+            $"invoices-{DateTime.Today:yyyyMMdd}.csv",
+            "text/csv;charset=utf-8",
+            string.Join(Environment.NewLine, rows));
+    }
+
+    private static string EscapeCsv(string value)
+    {
+        return "\"" + value.Replace("\"", "\"\"") + "\"";
     }
 }

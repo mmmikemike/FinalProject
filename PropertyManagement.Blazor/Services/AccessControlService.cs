@@ -51,6 +51,9 @@ public sealed record UserAccessProfile(string UserName, string Role, int? Tenant
     public bool CanViewApplications => IsAdmin || IsStaff;
     public bool CanEditApplications => IsAdmin;
 
+    public bool CanViewEvictionPrep => IsAdmin || IsStaff;
+    public bool CanEditEvictionPrep => IsAdmin;
+
     public static UserAccessProfile Anonymous { get; } = new(string.Empty, string.Empty, null);
 
     public static UserAccessProfile FromPrincipal(ClaimsPrincipal principal)

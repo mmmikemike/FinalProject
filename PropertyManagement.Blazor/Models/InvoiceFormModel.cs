@@ -17,6 +17,9 @@ public class InvoiceFormModel
     public string Status { get; set; } = "Draft";
 
     public bool IsExported { get; set; }
+    public List<InvoiceLineItemFormModel> LineItems { get; set; } = [new()];
+
+    public decimal LineItemsTotal => LineItems.Sum(item => item.LineTotal);
 
     public static InvoiceFormModel FromInvoice(InvoiceModel invoice) =>
         new()
@@ -26,6 +29,9 @@ public class InvoiceFormModel
             InvoiceDate = invoice.InvoiceDate,
             TotalAmount = invoice.TotalAmount,
             Status = invoice.Status,
-            IsExported = invoice.IsExported
+            IsExported = invoice.IsExported,
+            LineItems = invoice.LineItems.Count == 0
+                ? [new InvoiceLineItemFormModel { Description = invoice.ReferenceName, Quantity = 1m, UnitPrice = invoice.TotalAmount }]
+                : invoice.LineItems.Select(InvoiceLineItemFormModel.FromLineItem).ToList()
         };
 }

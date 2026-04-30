@@ -1,0 +1,382 @@
+@page "/eviction-prep"
+@attribute [Authorize(Roles = "Administrator,Staff")]
+@inject PropertyManagementApiClient ApiClient
+@inject AccessControlService AccessControl
+@inject Microsoft.JSInterop.IJSRuntime JsRuntime
+
+<PageTitle>Eviction Prep</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Eviction prep</h1>
+        <p class="page-intro">Track notice steps, evidence gathering, attorney consultation, and case resolution. This is process tracking only, not legal advice.</p>
+    </div>
+</div>
+
+<div class="alert alert-warning" role="alert">
+    This toolkit provides document templates and general process guidance only. It does not constitute legal advice. Always consult a licensed attorney before initiating eviction proceedings.
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+<div class="dashboard-grid">
+    <section class="stat-card compact-card">
+        <span class="stat-label">Open cases</span>
+        <strong>@cases.Count(item => item.Status == "Open")</strong>
+    </section>
+    <section class="stat-card compact-card">
+        <span class="stat-label">Paused</span>
+        <strong>@cases.Count(item => item.Status == "Paused")</strong>
+    </section>
+    <section class="stat-card compact-card">
+        <span class="stat-label">Resolved</span>
+        <strong>@cases.Count(item => item.Status == "Resolved")</strong>
+    </section>
+    <section class="stat-card compact-card">
+        <span class="stat-label">Evidence ready</span>
+        <strong>@cases.Count(item => item.EvidenceAttached)</strong>
+    </section>
+</div>
+
+<div class="workspace-grid">
+    @if (user.CanEditEvictionPrep)
+    {
+        <section class="glass-panel">
+            <div class="section-header">
+                <div>
+                    <h3>@(editingCaseId is null ? "Open case" : "Update case")</h3>
+                    <p class="page-intro">Use this checklist to keep the process consistent and documented.</p>
+                </div>
+            </div>
+
+            <EditForm class="record-form" Model="form" OnValidSubmit="SaveCaseAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="mb-3">
+                    <label class="form-label">Tenant</label>
+                    <InputSelect class="form-select" @bind-Value="form.TenantId">
+                        <option value="0">Select a tenant</option>
+                        @foreach (var tenant in tenants)
+                        {
+                            <option value="@tenant.TenantId">@tenant.FullName</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="() => form.TenantId" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Opened date</label>
+                    <InputDate class="form-control" @bind-Value="form.OpenedDate" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Reason</label>
+                    <InputSelect class="form-select" @bind-Value="form.Reason">
+                        @foreach (var reason in reasons)
+                        {
+                            <option value="@reason">@reason</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Status</label>
+                    <InputSelect class="form-select" @bind-Value="form.Status">
+                        @foreach (var status in statuses)
+                        {
+                            <option value="@status">@status</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Current step</label>
+                    <InputSelect class="form-select" @bind-Value="form.CurrentStep">
+                        @foreach (var step in steps)
+                        {
+                            <option value="@step">@step</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="checklist-stack mb-3">
+                    <label class="form-check">
+                        <InputCheckbox class="form-check-input" @bind-Value="form.LateRentNoticeComplete" />
+                        <span class="form-check-label">Late rent notice complete</span>
+                    </label>
+                    <label class="form-check">
+                        <InputCheckbox class="form-check-input" @bind-Value="form.PayOrQuitNoticeComplete" />
+                        <span class="form-check-label">Pay-or-quit notice complete</span>
+                    </label>
+                    <label class="form-check">
+                        <InputCheckbox class="form-check-input" @bind-Value="form.EvidenceAttached" />
+                        <span class="form-check-label">Evidence attached</span>
+                    </label>
+                    <label class="form-check">
+                        <InputCheckbox class="form-check-input" @bind-Value="form.AttorneyConsulted" />
+                        <span class="form-check-label">Attorney consulted</span>
+                    </label>
+                    <label class="form-check">
+                        <InputCheckbox class="form-check-input" @bind-Value="form.FilingPrepared" />
+                        <span class="form-check-label">Filing package prepared</span>
+                    </label>
+                    <label class="form-check">
+                        <InputCheckbox class="form-check-input" @bind-Value="form.Resolved" />
+                        <span class="form-check-label">Resolved / closed</span>
+                    </label>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <InputTextArea class="form-control" rows="4" @bind-Value="form.Notes" />
+                </div>
+
+                <div class="form-actions">
+                    <button class="btn btn-primary" type="submit" disabled="@isSaving">@(isSaving ? "Saving..." : "Save case")</button>
+                    <button class="btn btn-outline-primary" type="button" @onclick="ResetForm">Clear</button>
+                </div>
+            </EditForm>
+        </section>
+    }
+
+    <section class="glass-panel">
+        <div class="section-header">
+            <div>
+                <h3>Case tracker</h3>
+                <p class="page-intro">Staff can review every case; only admins can change the checklist.</p>
+            </div>
+        </div>
+
+        <div class="filter-row mb-3">
+            <div>
+                <label class="form-label">Status filter</label>
+                <InputSelect class="form-select" @bind-Value="selectedStatus">
+                    <option value="">All</option>
+                    @foreach (var status in statuses)
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </InputSelect>
+            </div>
+            <button class="btn btn-outline-primary" type="button" @onclick="LoadCasesAsync">Apply</button>
+            <button class="btn btn-outline-primary" type="button" @onclick="ExportCasesAsync">Export CSV</button>
+        </div>
+
+        @if (isLoading)
+        {
+            <p>Loading eviction cases...</p>
+        }
+        else if (cases.Count == 0)
+        {
+            <p>No eviction prep cases match the current filter.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Tenant</th>
+                            <th>Status</th>
+                            <th>Current step</th>
+                            <th>Progress</th>
+                            <th>Opened</th>
+                            @if (user.CanEditEvictionPrep)
+                            {
+                                <th class="text-end">Actions</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var evictionCase in cases)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@evictionCase.TenantName</strong>
+                                    <div class="mini-note">@evictionCase.PropertyName</div>
+                                </td>
+                                <td><span class="@evictionCase.StatusCssClass">@evictionCase.Status</span></td>
+                                <td>@evictionCase.CurrentStep</td>
+                                <td>@evictionCase.CompletedStepCount / 6 steps</td>
+                                <td>@evictionCase.OpenedDate.ToString("yyyy-MM-dd")</td>
+                                @if (user.CanEditEvictionPrep)
+                                {
+                                    <td class="action-cell">
+                                        <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEdit(evictionCase)">Edit</button>
+                                        <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteCaseAsync(evictionCase.CaseId)">Delete</button>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private static readonly string[] statuses = ["Open", "Paused", "Resolved"];
+    private static readonly string[] reasons = ["Late Rent", "Lease Violation", "Other"];
+    private static readonly string[] steps =
+    [
+        "Late Rent Notice",
+        "Pay-or-Quit Notice",
+        "Evidence Collection",
+        "Attorney Consultation",
+        "Filing Preparation",
+        "Resolved"
+    ];
+
+    private List<EvictionCaseModel> cases = [];
+    private List<TenantModel> tenants = [];
+    private EvictionCaseFormModel form = new();
+    private UserAccessProfile user = UserAccessProfile.Anonymous;
+    private bool isLoading = true;
+    private bool isSaving;
+    private int? editingCaseId;
+    private string selectedStatus = string.Empty;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await AccessControl.GetUserAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var tenantsTask = user.CanEditEvictionPrep ? ApiClient.GetTenantsAsync() : Task.FromResult(new List<TenantModel>());
+            var casesTask = ApiClient.GetEvictionCasesAsync(selectedStatus);
+            await Task.WhenAll(tenantsTask, casesTask);
+
+            tenants = tenantsTask.Result;
+            cases = casesTask.Result;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadCasesAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            cases = await ApiClient.GetEvictionCasesAsync(selectedStatus);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveCaseAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        try
+        {
+            if (editingCaseId is int caseId)
+            {
+                await ApiClient.UpdateEvictionCaseAsync(caseId, form);
+            }
+            else
+            {
+                await ApiClient.CreateEvictionCaseAsync(form);
+            }
+
+            await LoadCasesAsync();
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void BeginEdit(EvictionCaseModel evictionCase)
+    {
+        editingCaseId = evictionCase.CaseId;
+        form = EvictionCaseFormModel.FromCase(evictionCase);
+        errorMessage = null;
+    }
+
+    private async Task DeleteCaseAsync(int caseId)
+    {
+        try
+        {
+            await ApiClient.DeleteEvictionCaseAsync(caseId);
+            await LoadCasesAsync();
+
+            if (editingCaseId == caseId)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void ResetForm()
+    {
+        form = new EvictionCaseFormModel();
+        editingCaseId = null;
+        errorMessage = null;
+    }
+
+    private async Task ExportCasesAsync()
+    {
+        var rows = new List<string>
+        {
+            "CaseId,Tenant,Property,OpenedDate,Reason,Status,CurrentStep,CompletedSteps,Notes"
+        };
+
+        rows.AddRange(cases.Select(item =>
+            string.Join(",",
+                item.CaseId,
+                EscapeCsv(item.TenantName),
+                EscapeCsv(item.PropertyName),
+                EscapeCsv(item.OpenedDate.ToString("yyyy-MM-dd")),
+                EscapeCsv(item.Reason),
+                EscapeCsv(item.Status),
+                EscapeCsv(item.CurrentStep),
+                item.CompletedStepCount,
+                EscapeCsv(item.Notes))));
+
+        await JsRuntime.InvokeVoidAsync(
+            "pmDownloads.downloadText",
+            $"eviction-cases-{DateTime.Today:yyyyMMdd}.csv",
+            "text/csv;charset=utf-8",
+            string.Join(Environment.NewLine, rows));
+    }
+
+    private static string EscapeCsv(string value)
+    {
+        return "\"" + value.Replace("\"", "\"\"") + "\"";
+    }
+}

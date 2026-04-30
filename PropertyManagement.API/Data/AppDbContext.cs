@@ -12,6 +12,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<MaintenanceProject> MaintenanceProjects => Set<MaintenanceProject>();
     public DbSet<WorkLog> WorkLogs => Set<WorkLog>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<InvoiceLineItem> InvoiceLineItems => Set<InvoiceLineItem>();
+    public DbSet<EvictionCase> EvictionCases => Set<EvictionCase>();
     public DbSet<PropertyApplication> PropertyApplications => Set<PropertyApplication>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -25,6 +27,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<MaintenanceProject>().ToTable("MaintenanceProjects");
         modelBuilder.Entity<WorkLog>().ToTable("WorkLogs");
         modelBuilder.Entity<Invoice>().ToTable("Invoices");
+        modelBuilder.Entity<InvoiceLineItem>().ToTable("InvoiceLineItems");
+        modelBuilder.Entity<EvictionCase>().ToTable("EvictionCases");
         modelBuilder.Entity<PropertyApplication>().ToTable("PropertyApplications");
 
         modelBuilder.Entity<PropertyApplication>()
@@ -119,6 +123,34 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Property(invoice => invoice.Status)
             .HasMaxLength(20);
 
+        modelBuilder.Entity<InvoiceLineItem>()
+            .Property(item => item.Description)
+            .HasMaxLength(200);
+
+        modelBuilder.Entity<InvoiceLineItem>()
+            .Property(item => item.ItemType)
+            .HasMaxLength(50);
+
+        modelBuilder.Entity<InvoiceLineItem>()
+            .Property(item => item.Quantity)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<InvoiceLineItem>()
+            .Property(item => item.UnitPrice)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<EvictionCase>()
+            .Property(item => item.Reason)
+            .HasMaxLength(100);
+
+        modelBuilder.Entity<EvictionCase>()
+            .Property(item => item.Status)
+            .HasMaxLength(30);
+
+        modelBuilder.Entity<EvictionCase>()
+            .Property(item => item.CurrentStep)
+            .HasMaxLength(100);
+
         modelBuilder.Entity<PropertyApplication>()
             .Property(application => application.ApplicantFirstName)
             .HasMaxLength(50);
@@ -197,6 +229,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasForeignKey(invoice => invoice.ScheduleId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        modelBuilder.Entity<InvoiceLineItem>()
+            .HasOne(item => item.Invoice)
+            .WithMany(invoice => invoice.LineItems)
+            .HasForeignKey(item => item.InvoiceId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<EvictionCase>()
+            .HasOne(item => item.Tenant)
+            .WithMany()
+            .HasForeignKey(item => item.TenantId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         modelBuilder.Entity<PropertyApplication>()
             .HasOne(application => application.Property)
             .WithMany(property => property.Applications)
@@ -250,5 +294,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             new Invoice { InvoiceId = 2, ProjectId = 2, ScheduleId = null, InvoiceDate = new DateTime(2026, 2, 14, 12, 0, 0, DateTimeKind.Utc), TotalAmount = 400m, Status = "Sent", IsExported = false },
             new Invoice { InvoiceId = 3, ProjectId = null, ScheduleId = 2, InvoiceDate = new DateTime(2026, 4, 3, 9, 0, 0, DateTimeKind.Utc), TotalAmount = 1250m, Status = "Overdue", IsExported = false },
             new Invoice { InvoiceId = 4, ProjectId = 6, ScheduleId = null, InvoiceDate = new DateTime(2026, 1, 13, 12, 0, 0, DateTimeKind.Utc), TotalAmount = 100m, Status = "Paid", IsExported = true });
+
+        modelBuilder.Entity<InvoiceLineItem>().HasData(
+            new InvoiceLineItem { LineItemId = 1, InvoiceId = 1, Description = "Broken faucet repair labor", ItemType = "Labor", Quantity = 1m, UnitPrice = 150m },
+            new InvoiceLineItem { LineItemId = 2, InvoiceId = 2, Description = "Bedroom painting labor and supplies", ItemType = "Labor", Quantity = 1m, UnitPrice = 400m },
+            new InvoiceLineItem { LineItemId = 3, InvoiceId = 3, Description = "April rent charge", ItemType = "Rent", Quantity = 1m, UnitPrice = 1250m },
+            new InvoiceLineItem { LineItemId = 4, InvoiceId = 4, Description = "Door lock repair", ItemType = "Labor", Quantity = 1m, UnitPrice = 100m });
+
+        modelBuilder.Entity<EvictionCase>().HasData(
+            new EvictionCase
+            {
+                CaseId = 1,
+                TenantId = 2,
+                OpenedDate = new DateTime(2026, 4, 5, 0, 0, 0, DateTimeKind.Utc),
+                Reason = "Late Rent",
+                Status = "Open",
+                CurrentStep = "Late Rent Notice",
+                Notes = "Initial notice preparation for unpaid April rent.",
+                LateRentNoticeComplete = true
+            });
     }
 }

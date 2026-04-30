@@ -259,6 +259,13 @@ else
                         <p>Review public leasing applications and keep the pipeline moving.</p>
                     </a>
                 }
+                @if (user.CanViewEvictionPrep)
+                {
+                    <a class="shortcut-card" href="eviction-prep">
+                        <strong>Eviction prep</strong>
+                        <p>Track notice steps, evidence, attorney review, and case resolution.</p>
+                    </a>
+                }
             </div>
         </section>
     </div>

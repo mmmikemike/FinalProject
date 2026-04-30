@@ -11,4 +11,5 @@ public record InvoiceDto(
     bool IsExported,
     string ReferenceName,
     string PropertyName,
-    string CustomerName);
+    string CustomerName,
+    IReadOnlyList<InvoiceLineItemDto> LineItems);

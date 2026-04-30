@@ -142,6 +142,39 @@ public static class DatabaseInitializer
                     );
                 END;
 
+                IF OBJECT_ID(N'dbo.InvoiceLineItems', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.InvoiceLineItems (
+                        LineItemID INT IDENTITY(1,1) PRIMARY KEY,
+                        InvoiceID INT NOT NULL,
+                        Description NVARCHAR(200) NOT NULL,
+                        ItemType NVARCHAR(50) NOT NULL CONSTRAINT DF_InvoiceLineItems_ItemType DEFAULT('Labor'),
+                        Quantity DECIMAL(18,2) NOT NULL CONSTRAINT DF_InvoiceLineItems_Quantity DEFAULT(1),
+                        UnitPrice DECIMAL(18,2) NOT NULL CONSTRAINT DF_InvoiceLineItems_UnitPrice DEFAULT(0),
+                        CONSTRAINT FK_InvoiceLineItems_Invoices FOREIGN KEY (InvoiceID) REFERENCES dbo.Invoices(InvoiceID) ON DELETE CASCADE
+                    );
+                END;
+
+                IF OBJECT_ID(N'dbo.EvictionCases', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.EvictionCases (
+                        CaseID INT IDENTITY(1,1) PRIMARY KEY,
+                        TenantID INT NOT NULL,
+                        OpenedDate DATETIME NOT NULL CONSTRAINT DF_EvictionCases_OpenedDate DEFAULT(GETDATE()),
+                        Reason NVARCHAR(100) NOT NULL CONSTRAINT DF_EvictionCases_Reason DEFAULT('Late Rent'),
+                        Status NVARCHAR(30) NOT NULL CONSTRAINT DF_EvictionCases_Status DEFAULT('Open'),
+                        CurrentStep NVARCHAR(100) NOT NULL CONSTRAINT DF_EvictionCases_CurrentStep DEFAULT('Late Rent Notice'),
+                        Notes NVARCHAR(MAX) NOT NULL CONSTRAINT DF_EvictionCases_Notes DEFAULT(''),
+                        LateRentNoticeComplete BIT NOT NULL CONSTRAINT DF_EvictionCases_LateRent DEFAULT(0),
+                        PayOrQuitNoticeComplete BIT NOT NULL CONSTRAINT DF_EvictionCases_PayOrQuit DEFAULT(0),
+                        EvidenceAttached BIT NOT NULL CONSTRAINT DF_EvictionCases_Evidence DEFAULT(0),
+                        AttorneyConsulted BIT NOT NULL CONSTRAINT DF_EvictionCases_Attorney DEFAULT(0),
+                        FilingPrepared BIT NOT NULL CONSTRAINT DF_EvictionCases_Filing DEFAULT(0),
+                        Resolved BIT NOT NULL CONSTRAINT DF_EvictionCases_Resolved DEFAULT(0),
+                        CONSTRAINT FK_EvictionCases_Tenants FOREIGN KEY (TenantID) REFERENCES dbo.Tenants(TenantID) ON DELETE CASCADE
+                    );
+                END;
+
                 IF COL_LENGTH('dbo.Invoices', 'ProjectID') IS NULL
                 BEGIN
                     ALTER TABLE dbo.Invoices ADD ProjectID INT NULL;
@@ -292,6 +325,23 @@ public static class DatabaseInitializer
                         (2, NULL, '2026-02-14T12:00:00', 400.00, 'Sent', 0),
                         (NULL, 2, '2026-04-03T09:00:00', 1250.00, 'Overdue', 0),
                         (6, NULL, '2026-01-13T12:00:00', 100.00, 'Paid', 1);
+                END;
+
+                IF NOT EXISTS (SELECT 1 FROM dbo.InvoiceLineItems)
+                BEGIN
+                    INSERT INTO dbo.InvoiceLineItems (InvoiceID, Description, ItemType, Quantity, UnitPrice)
+                    VALUES
+                        (1, 'Broken faucet repair labor', 'Labor', 1.00, 150.00),
+                        (2, 'Bedroom painting labor and supplies', 'Labor', 1.00, 400.00),
+                        (3, 'April rent charge', 'Rent', 1.00, 1250.00),
+                        (4, 'Door lock repair', 'Labor', 1.00, 100.00);
+                END;
+
+                IF NOT EXISTS (SELECT 1 FROM dbo.EvictionCases)
+                BEGIN
+                    INSERT INTO dbo.EvictionCases (TenantID, OpenedDate, Reason, Status, CurrentStep, Notes, LateRentNoticeComplete)
+                    VALUES
+                        (2, '2026-04-05T00:00:00', 'Late Rent', 'Open', 'Late Rent Notice', 'Initial notice preparation for unpaid April rent.', 1);
                 END;
                 """);
         }

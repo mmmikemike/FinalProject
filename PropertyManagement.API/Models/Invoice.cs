@@ -16,4 +16,5 @@ public class Invoice
 
     public MaintenanceProject? Project { get; set; }
     public RentSchedule? Schedule { get; set; }
+    public ICollection<InvoiceLineItem> LineItems { get; set; } = [];
 }

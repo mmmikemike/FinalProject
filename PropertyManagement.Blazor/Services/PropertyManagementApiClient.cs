@@ -195,6 +195,34 @@ public class PropertyManagementApiClient(HttpClient httpClient)
         await EnsureSuccessAsync(response);
     }
 
+    public async Task<List<EvictionCaseModel>> GetEvictionCasesAsync(string? status = null, int? tenantId = null)
+    {
+        var endpoint = BuildQuery(
+            "api/evictioncases",
+            ("status", status),
+            ("tenantId", tenantId?.ToString()));
+
+        return await httpClient.GetFromJsonAsync<List<EvictionCaseModel>>(endpoint) ?? [];
+    }
+
+    public async Task<EvictionCaseModel> CreateEvictionCaseAsync(EvictionCaseFormModel form)
+    {
+        var response = await httpClient.PostAsJsonAsync("api/evictioncases", form);
+        return await ReadAsync<EvictionCaseModel>(response);
+    }
+
+    public async Task<EvictionCaseModel> UpdateEvictionCaseAsync(int id, EvictionCaseFormModel form)
+    {
+        var response = await httpClient.PutAsJsonAsync($"api/evictioncases/{id}", form);
+        return await ReadAsync<EvictionCaseModel>(response);
+    }
+
+    public async Task DeleteEvictionCaseAsync(int id)
+    {
+        var response = await httpClient.DeleteAsync($"api/evictioncases/{id}");
+        await EnsureSuccessAsync(response);
+    }
+
     public async Task<List<PropertyApplicationModel>> GetPropertyApplicationsAsync(string? status = null, int? propertyId = null)
     {
         var endpoint = BuildQuery(

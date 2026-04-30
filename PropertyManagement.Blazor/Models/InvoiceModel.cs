@@ -13,6 +13,7 @@ public class InvoiceModel
     public string ReferenceName { get; set; } = string.Empty;
     public string PropertyName { get; set; } = string.Empty;
     public string CustomerName { get; set; } = string.Empty;
+    public List<InvoiceLineItemModel> LineItems { get; set; } = [];
 
     public string StatusCssClass => Status.ToLowerInvariant() switch
     {
