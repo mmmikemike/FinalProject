@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<WorkLog> WorkLogs => Set<WorkLog>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<PropertyApplication> PropertyApplications => Set<PropertyApplication>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -26,6 +27,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<WorkLog>().ToTable("WorkLogs");
         modelBuilder.Entity<Invoice>().ToTable("Invoices");
         modelBuilder.Entity<PropertyApplication>().ToTable("PropertyApplications");
+
 
         modelBuilder.Entity<PropertyApplication>()
             .HasKey(application => application.ApplicationId);

@@ -254,4 +254,16 @@ public class PropertyManagementApiClient(HttpClient httpClient)
 
         throw new InvalidOperationException(message);
     }
+
+    public async Task SendNotificationAsync(int tenantId, string subject, string message)
+    {
+        var response = await httpClient.PostAsJsonAsync("api/notifications",
+            new { TenantId = tenantId, Subject = subject, Message = message });
+        await EnsureSuccessAsync(response);
+    }
+    public async Task<List<NotificationDto>> GetNotificationsAsync(int? tenantId = null)
+    {
+        var url = tenantId.HasValue ? $"api/notifications?tenantId={tenantId}" : "api/notifications";
+        return await httpClient.GetFromJsonAsync<List<NotificationDto>>(url) ?? [];
+    }
 }

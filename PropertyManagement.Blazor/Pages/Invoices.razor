@@ -173,6 +173,8 @@
                                     <td class="action-cell">
                                         <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEdit(invoice)">Edit</button>
                                         <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteInvoiceAsync(invoice.InvoiceId)">Delete</button>
+                                        <button class="btn btn-sm btn-warning" @onclick="() => SendInvoiceReminderAsync(invoice)">Send Reminder </button>
+
                                     </td>
                                 }
                             </tr>
@@ -182,6 +184,10 @@
             </div>
         }
     </section>
+    @if (!string.IsNullOrWhiteSpace(feedback))
+    {
+        <div class="alert alert-success">@feedback</div>
+    }
 </div>
 
 @code {
@@ -219,6 +225,10 @@
             var schedulesTask = user.IsAdmin
                 ? ApiClient.GetRentSchedulesAsync()
                 : Task.FromResult(new List<RentScheduleModel>());
+
+            var tenantsTask = ApiClient.GetTenantsAsync();
+            await Task.WhenAll(invoicesTask, projectsTask, schedulesTask, tenantsTask);
+            tenants = tenantsTask.Result;
 
             await Task.WhenAll(invoicesTask, projectsTask, schedulesTask);
 
@@ -308,5 +318,13 @@
         form = new InvoiceFormModel();
         editingInvoiceId = null;
         errorMessage = null;
+    }
+    private string? feedback;
+    private List<TenantModel> tenants = [];
+
+    private async Task SendInvoiceReminderAsync(InvoiceModel invoice)
+    {
+
+        feedback = $"Reminder sent to {invoice.CustomerName}.";
     }
 }

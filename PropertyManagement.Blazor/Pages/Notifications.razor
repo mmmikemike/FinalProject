@@ -1,0 +1,83 @@
+﻿@page "/notifications"
+@attribute [Authorize(Roles = "Admin,Staff")]
+@inject PropertyManagementApiClient Api
+
+<h2>Notifications</h2>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h5>Send Notification</h5>
+
+        <div class="mb-3">
+            <label class="form-label">Recipient</label>
+            <select class="form-select" @bind="selectedTenantId">
+                <option value="0">— All Tenants —</option>
+                @foreach (var t in tenants)
+                {
+                    <option value="@t.TenantId">@t.FirstName @t.LastName</option>
+                }
+            </select>
+        </div>
+
+
+        <div class="mb-3">
+            <label class="form-label">Message</label>
+            <textarea class="form-control" rows="4" @bind="message"></textarea>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(feedback))
+        {
+            <div class="alert alert-success">@feedback</div>
+        }
+
+        <button class="btn btn-primary" @onclick="HandleSend">Send Notification</button>
+    </div>
+</div>
+
+<h5>Sent Notifications</h5>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Tenant</th>
+            <th>Subject</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var n in notifications)
+        {
+            <tr>
+                <td>@n.TenantName</td>
+                <td>@n.Subject</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<TenantModel> tenants = [];
+    private List<NotificationDto> notifications = [];
+    private int selectedTenantId;
+    private string subject = string.Empty;
+    private string message = string.Empty;
+    private string? feedback;
+
+    protected override async Task OnInitializedAsync()
+    {
+        tenants = await Api.GetTenantsAsync();
+        notifications = await Api.GetNotificationsAsync();
+    }
+
+    private async Task HandleSend()
+    {
+        feedback = null;
+        await Api.SendNotificationAsync(selectedTenantId, subject, message);
+
+        feedback = selectedTenantId == 0
+            ? "Notification sent to all tenants."
+            : "Notification sent successfully.";
+
+        notifications = await Api.GetNotificationsAsync();
+        subject = string.Empty;
+        message = string.Empty;
+    }
+}
