@@ -1,0 +1,429 @@
+@page "/rent-collection"
+@attribute [Authorize(Roles = "Administrator,Staff")]
+@inject PropertyManagementApiClient ApiClient
+@inject AccessControlService AccessControl
+
+<PageTitle>Rent Collection</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Rent collection</h1>
+        <p class="page-intro">Prioritize unpaid rent, log follow-up, apply late fees, and record payments from one workflow.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+<div class="dashboard-grid">
+    <section class="stat-card compact-card">
+        <span class="stat-label">Outstanding</span>
+        <strong>@OutstandingTotal.ToString("C0")</strong>
+    </section>
+    <section class="stat-card compact-card">
+        <span class="stat-label">Late</span>
+        <strong>@schedules.Count(item => item.Status == "Late")</strong>
+    </section>
+    <section class="stat-card compact-card">
+        <span class="stat-label">Unpaid</span>
+        <strong>@schedules.Count(item => item.Status == "Unpaid")</strong>
+    </section>
+    <section class="stat-card compact-card">
+        <span class="stat-label">Partial</span>
+        <strong>@schedules.Count(item => item.Status == "Partial")</strong>
+    </section>
+</div>
+
+<section class="glass-panel">
+    <div class="section-header">
+        <div>
+            <h3>Collection queue</h3>
+            <p class="page-intro">Filter the current rent schedule list and select a tenant to work the follow-up timeline.</p>
+        </div>
+    </div>
+
+    <div class="filter-row mb-3">
+        <div>
+            <label class="form-label">Status</label>
+            <InputSelect class="form-select" @bind-Value="selectedStatus">
+                <option value="">All</option>
+                @foreach (var status in statuses)
+                {
+                    <option value="@status">@status</option>
+                }
+            </InputSelect>
+        </div>
+        <div>
+            <label class="form-label">Month</label>
+            <InputText class="form-control" placeholder="yyyy-MM" @bind-Value="selectedMonth" />
+        </div>
+        <button class="btn btn-outline-primary" type="button" @onclick="LoadSchedulesAsync">Apply</button>
+    </div>
+
+    @if (isLoading)
+    {
+        <p>Loading rent collection queue...</p>
+    }
+    else if (schedules.Count == 0)
+    {
+        <p>No rent schedules match the current filters.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>Tenant</th>
+                        <th>Due date</th>
+                        <th>Status</th>
+                        <th>Remaining</th>
+                        <th>Reminders</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var schedule in schedules)
+                    {
+                        <tr class="@(selectedSchedule?.ScheduleId == schedule.ScheduleId ? "table-active" : string.Empty)">
+                            <td>@schedule.TenantName</td>
+                            <td>@schedule.DueDate.ToString("yyyy-MM-dd")</td>
+                            <td><span class="@schedule.StatusCssClass">@schedule.Status</span></td>
+                            <td>@Remaining(schedule).ToString("C")</td>
+                            <td>@schedule.ReminderCount</td>
+                            <td class="action-cell">
+                                <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => SelectScheduleAsync(schedule)">Open</button>
+                                @if (user.CanEditRentCollection)
+                                {
+                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick='() => StartReminder(schedule, "Day 1 reminder")'>Reminder</button>
+                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick='() => StartReminder(schedule, "Final notice")'>Final notice</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@if (selectedSchedule is not null)
+{
+    <div class="workspace-grid mt-4">
+        <section class="glass-panel">
+            <div class="section-header">
+                <div>
+                    <h3>@selectedSchedule.TenantName</h3>
+                    <p class="page-intro">Rent due @selectedSchedule.DueDate.ToString("yyyy-MM-dd") with @Remaining(selectedSchedule).ToString("C") remaining.</p>
+                </div>
+            </div>
+
+            <div class="metric-strip">
+                <div class="metric-chip">
+                    <span>Total due</span>
+                    <strong>@selectedSchedule.TotalDue.ToString("C")</strong>
+                </div>
+                <div class="metric-chip">
+                    <span>Total paid</span>
+                    <strong>@selectedSchedule.TotalPaid.ToString("C")</strong>
+                </div>
+                <div class="metric-chip">
+                    <span>Late fees</span>
+                    <strong>@selectedSchedule.LateFeeAccrued.ToString("C")</strong>
+                </div>
+            </div>
+
+            @if (user.CanEditRentCollection)
+            {
+                <div class="collection-actions">
+                    <div>
+                        <label class="form-label">Late fee amount</label>
+                        <InputNumber class="form-control" @bind-Value="lateFeeForm.FeeAmount" />
+                    </div>
+                    <button class="btn btn-outline-primary" type="button" @onclick="ApplyLateFeeAsync">Apply late fee</button>
+                </div>
+
+                <EditForm class="record-form mt-3" Model="paymentForm" OnValidSubmit="RecordPaymentAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <div class="compact-grid">
+                        <div>
+                            <label class="form-label">Payment amount</label>
+                            <InputNumber class="form-control" @bind-Value="paymentForm.AmountPaid" />
+                        </div>
+                        <div>
+                            <label class="form-label">Method</label>
+                            <InputSelect class="form-select" @bind-Value="paymentForm.PaymentMethod">
+                                @foreach (var method in paymentMethods)
+                                {
+                                    <option value="@method">@method</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-3">
+                        <label class="form-label">Transaction reference</label>
+                        <InputText class="form-control" @bind-Value="paymentForm.TransactionRef" />
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" type="submit">Record payment</button>
+                    </div>
+                </EditForm>
+            }
+        </section>
+
+        <section class="glass-panel">
+            <div class="section-header">
+                <div>
+                    <h3>Follow-up timeline</h3>
+                    <p class="page-intro">Every rent reminder, notice, call, and admin note appears here.</p>
+                </div>
+            </div>
+
+            @if (user.CanEditRentCollection)
+            {
+                <EditForm class="record-form" Model="communicationForm" OnValidSubmit="SaveCommunicationAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <div class="compact-grid">
+                        <div>
+                            <label class="form-label">Channel</label>
+                            <InputSelect class="form-select" @bind-Value="communicationForm.Channel">
+                                @foreach (var channel in channels)
+                                {
+                                    <option value="@channel">@channel</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div>
+                            <label class="form-label">Logged at</label>
+                            <InputDate class="form-control" @bind-Value="communicationForm.LoggedAt" />
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-3">
+                        <label class="form-label">Subject</label>
+                        <InputText class="form-control" @bind-Value="communicationForm.Subject" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Message</label>
+                        <InputTextArea class="form-control" rows="4" @bind-Value="communicationForm.Message" />
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" type="submit">Log follow-up</button>
+                    </div>
+                </EditForm>
+
+                <hr />
+            }
+
+            @if (logs.Count == 0)
+            {
+                <p>No follow-up has been logged for this schedule yet.</p>
+            }
+            else
+            {
+                <div class="timeline-stack">
+                    @foreach (var log in logs)
+                    {
+                        <article class="timeline-item">
+                            <div>
+                                <strong>@log.Subject</strong>
+                                <p>@log.Message</p>
+                            </div>
+                            <div class="text-end">
+                                <span class="status-pill status-unpaid">@log.Channel</span>
+                                <p class="mini-note">@log.LoggedAt.ToLocalTime().ToString("yyyy-MM-dd") by @log.CreatedBy</p>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private static readonly string[] statuses = ["Unpaid", "Late", "Partial", "Paid"];
+    private static readonly string[] paymentMethods = ["ACH", "Card", "Cash", "Check"];
+    private static readonly string[] channels = ["Text", "Email", "Call", "Voicemail", "Notice", "System", "Note"];
+
+    private List<RentScheduleModel> schedules = [];
+    private List<CommunicationLogModel> logs = [];
+    private RentScheduleModel? selectedSchedule;
+    private CommunicationLogFormModel communicationForm = new();
+    private RentPaymentFormModel paymentForm = new();
+    private ApplyLateFeeModel lateFeeForm = new();
+    private UserAccessProfile user = UserAccessProfile.Anonymous;
+    private bool isLoading = true;
+    private string selectedStatus = string.Empty;
+    private string selectedMonth = DateTime.Today.ToString("yyyy-MM");
+    private string? errorMessage;
+
+    private decimal OutstandingTotal => schedules.Sum(schedule => Remaining(schedule));
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await AccessControl.GetUserAsync();
+        await LoadSchedulesAsync();
+    }
+
+    private async Task LoadSchedulesAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            schedules = await ApiClient.GetRentSchedulesAsync(selectedStatus, selectedMonth);
+
+            if (selectedSchedule is not null)
+            {
+                selectedSchedule = schedules.FirstOrDefault(item => item.ScheduleId == selectedSchedule.ScheduleId);
+                if (selectedSchedule is not null)
+                {
+                    await SelectScheduleAsync(selectedSchedule);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SelectScheduleAsync(RentScheduleModel schedule)
+    {
+        selectedSchedule = schedule;
+        paymentForm = new RentPaymentFormModel
+        {
+            ScheduleId = schedule.ScheduleId,
+            AmountPaid = Math.Max(0m, Remaining(schedule)),
+            PaymentDate = DateTime.Today,
+            PaymentMethod = "ACH"
+        };
+        lateFeeForm = new ApplyLateFeeModel { CreatedBy = user.UserName };
+        ResetCommunicationForm(schedule);
+        logs = await ApiClient.GetCommunicationLogsAsync(schedule.TenantId, schedule.ScheduleId);
+    }
+
+    private void StartReminder(RentScheduleModel schedule, string template)
+    {
+        selectedSchedule = schedule;
+        ResetCommunicationForm(schedule);
+
+        communicationForm.Channel = template == "Final notice" ? "Notice" : "Text";
+        communicationForm.Subject = template;
+        communicationForm.Message = template == "Final notice"
+            ? $"Final notice: rent for {schedule.DueDate:yyyy-MM-dd} remains unpaid with a balance of {Remaining(schedule):C}. Please contact the office immediately."
+            : $"Friendly reminder: rent for {schedule.DueDate:yyyy-MM-dd} has a remaining balance of {Remaining(schedule):C}. Please contact us if payment has already been sent.";
+    }
+
+    private async Task SaveCommunicationAsync()
+    {
+        if (selectedSchedule is null)
+        {
+            return;
+        }
+
+        try
+        {
+            communicationForm.TenantId = selectedSchedule.TenantId;
+            communicationForm.ScheduleId = selectedSchedule.ScheduleId;
+            communicationForm.CreatedBy = user.UserName;
+
+            await ApiClient.CreateCommunicationLogAsync(communicationForm);
+            await ApiClient.UpdateRentScheduleAsync(
+                selectedSchedule.ScheduleId,
+                CreateIncrementedReminderForm(selectedSchedule));
+            await LoadSchedulesAsync();
+            logs = await ApiClient.GetCommunicationLogsAsync(selectedSchedule.TenantId, selectedSchedule.ScheduleId);
+            ResetCommunicationForm(selectedSchedule);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task ApplyLateFeeAsync()
+    {
+        if (selectedSchedule is null)
+        {
+            return;
+        }
+
+        try
+        {
+            lateFeeForm.CreatedBy = user.UserName;
+            selectedSchedule = await ApiClient.ApplyLateFeeAsync(selectedSchedule.ScheduleId, lateFeeForm);
+            await LoadSchedulesAsync();
+            logs = await ApiClient.GetCommunicationLogsAsync(selectedSchedule.TenantId, selectedSchedule.ScheduleId);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task RecordPaymentAsync()
+    {
+        if (selectedSchedule is null)
+        {
+            return;
+        }
+
+        try
+        {
+            paymentForm.ScheduleId = selectedSchedule.ScheduleId;
+            await ApiClient.CreateRentPaymentAsync(paymentForm);
+            communicationForm = new CommunicationLogFormModel
+            {
+                TenantId = selectedSchedule.TenantId,
+                ScheduleId = selectedSchedule.ScheduleId,
+                Channel = "System",
+                Subject = "Payment recorded",
+                Message = $"Recorded {paymentForm.AmountPaid:C} payment by {paymentForm.PaymentMethod}.",
+                CreatedBy = user.UserName,
+                LoggedAt = DateTime.Now
+            };
+            await ApiClient.CreateCommunicationLogAsync(communicationForm);
+            await LoadSchedulesAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void ResetCommunicationForm(RentScheduleModel schedule)
+    {
+        communicationForm = new CommunicationLogFormModel
+        {
+            TenantId = schedule.TenantId,
+            ScheduleId = schedule.ScheduleId,
+            Channel = "Text",
+            Subject = "Rent follow-up",
+            Message = string.Empty,
+            CreatedBy = user.UserName,
+            LoggedAt = DateTime.Now
+        };
+    }
+
+    private static decimal Remaining(RentScheduleModel schedule)
+    {
+        return Math.Max(0m, schedule.TotalDue - schedule.TotalPaid);
+    }
+
+    private static RentScheduleFormModel CreateIncrementedReminderForm(RentScheduleModel schedule)
+    {
+        var form = RentScheduleFormModel.FromSchedule(schedule);
+        form.ReminderCount += 1;
+        return form;
+    }
+}

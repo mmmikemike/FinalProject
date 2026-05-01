@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
@@ -11,6 +12,7 @@ namespace PropertyManagement.API.Controllers;
 public class PropertyApplicationsController(AppDbContext dbContext) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Roles = "Administrator,Staff")]
     public async Task<ActionResult<IEnumerable<PropertyApplicationDto>>> GetApplications([FromQuery] string? status = null, [FromQuery] int? propertyId = null)
     {
         var query = dbContext.PropertyApplications
@@ -54,6 +56,7 @@ public class PropertyApplicationsController(AppDbContext dbContext) : Controller
     }
 
     [HttpGet("{id:int}")]
+    [Authorize(Roles = "Administrator,Staff")]
     public async Task<ActionResult<PropertyApplicationDto>> GetApplication(int id)
     {
         var application = await MapApplicationAsync(id);
@@ -61,6 +64,7 @@ public class PropertyApplicationsController(AppDbContext dbContext) : Controller
     }
 
     [HttpPost]
+    [AllowAnonymous]
     public async Task<ActionResult<PropertyApplicationDto>> CreateApplication([FromBody] PropertyApplicationUpsertRequest request)
     {
         if (!await dbContext.Properties.AnyAsync(item => item.PropertyId == request.PropertyId))
@@ -93,6 +97,7 @@ public class PropertyApplicationsController(AppDbContext dbContext) : Controller
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<PropertyApplicationDto>> UpdateApplication(int id, [FromBody] PropertyApplicationUpsertRequest request)
     {
         var application = await dbContext.PropertyApplications.FindAsync(id);
@@ -126,6 +131,7 @@ public class PropertyApplicationsController(AppDbContext dbContext) : Controller
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Administrator")]
     public async Task<IActionResult> DeleteApplication(int id)
     {
         var application = await dbContext.PropertyApplications.FindAsync(id);

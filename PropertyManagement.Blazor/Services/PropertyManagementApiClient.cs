@@ -73,6 +73,12 @@ public class PropertyManagementApiClient(HttpClient httpClient)
         return await ReadAsync<RentScheduleModel>(response);
     }
 
+    public async Task<RentScheduleModel> ApplyLateFeeAsync(int id, ApplyLateFeeModel form)
+    {
+        var response = await httpClient.PostAsJsonAsync($"api/rentschedules/{id}/apply-late-fee", form);
+        return await ReadAsync<RentScheduleModel>(response);
+    }
+
     public async Task DeleteRentScheduleAsync(int id)
     {
         var response = await httpClient.DeleteAsync($"api/rentschedules/{id}");
@@ -105,6 +111,22 @@ public class PropertyManagementApiClient(HttpClient httpClient)
     {
         var response = await httpClient.DeleteAsync($"api/rentpayments/{id}");
         await EnsureSuccessAsync(response);
+    }
+
+    public async Task<List<CommunicationLogModel>> GetCommunicationLogsAsync(int? tenantId = null, int? scheduleId = null)
+    {
+        var endpoint = BuildQuery(
+            "api/communicationlogs",
+            ("tenantId", tenantId?.ToString()),
+            ("scheduleId", scheduleId?.ToString()));
+
+        return await httpClient.GetFromJsonAsync<List<CommunicationLogModel>>(endpoint) ?? [];
+    }
+
+    public async Task<CommunicationLogModel> CreateCommunicationLogAsync(CommunicationLogFormModel form)
+    {
+        var response = await httpClient.PostAsJsonAsync("api/communicationlogs", form);
+        return await ReadAsync<CommunicationLogModel>(response);
     }
 
     public async Task<TenantLedgerModel?> GetTenantLedgerAsync(int tenantId) =>

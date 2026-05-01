@@ -1,10 +1,18 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Data;
+using PropertyManagement.API.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddSingleton<DemoJwtTokenService>();
+builder.Services
+    .AddAuthentication("DemoJwt")
+    .AddScheme<AuthenticationSchemeOptions, DemoJwtAuthenticationHandler>("DemoJwt", _ => { });
+builder.Services.AddAuthorization();
 
 builder.Services.AddCors(options =>
 {
@@ -42,6 +50,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("AllowBlazorClient");
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

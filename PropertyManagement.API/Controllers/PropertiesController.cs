@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
@@ -11,6 +12,7 @@ namespace PropertyManagement.API.Controllers;
 public class PropertiesController(AppDbContext dbContext) : ControllerBase
 {
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<PropertyLookupDto>>> GetProperties()
     {
         var properties = await dbContext.Properties
@@ -31,6 +33,7 @@ public class PropertiesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [AllowAnonymous]
     public async Task<ActionResult<PropertyLookupDto>> GetProperty(int id)
     {
         var property = await dbContext.Properties
@@ -50,6 +53,7 @@ public class PropertiesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<PropertyLookupDto>> CreateProperty([FromBody] PropertyUpsertRequest request)
     {
         var property = new Property
@@ -67,6 +71,7 @@ public class PropertiesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<PropertyLookupDto>> UpdateProperty(int id, [FromBody] PropertyUpsertRequest request)
     {
         var property = await dbContext.Properties.FindAsync(id);
@@ -86,6 +91,7 @@ public class PropertiesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Administrator")]
     public async Task<IActionResult> DeleteProperty(int id)
     {
         var property = await dbContext.Properties

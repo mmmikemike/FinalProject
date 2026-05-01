@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
@@ -8,6 +9,7 @@ namespace PropertyManagement.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = "Administrator,Staff")]
     public class TenantsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -45,6 +47,7 @@ namespace PropertyManagement.API.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Administrator")]
         public async Task<ActionResult<TenantDto>> PostTenant(TenantUpsertRequest request)
         {
             var propertyExists = await _context.Properties.AnyAsync(property => property.PropertyId == request.PropertyId);
@@ -75,6 +78,7 @@ namespace PropertyManagement.API.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Administrator")]
         public async Task<ActionResult<TenantDto>> PutTenant(int id, TenantUpsertRequest request)
         {
             var tenant = await _context.Tenants.FirstOrDefaultAsync(existingTenant => existingTenant.TenantId == id);
@@ -116,6 +120,7 @@ namespace PropertyManagement.API.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Administrator")]
         public async Task<IActionResult> DeleteTenant(int id)
         {
             var tenant = await _context.Tenants.FindAsync(id);

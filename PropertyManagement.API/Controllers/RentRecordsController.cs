@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
 using PropertyManagement.API.Data;
+using PropertyManagement.API.Security;
 
 namespace PropertyManagement.API.Controllers;
 
@@ -10,8 +12,14 @@ namespace PropertyManagement.API.Controllers;
 public class RentRecordsController(AppDbContext dbContext) : ControllerBase
 {
     [HttpGet("tenant/{tenantId:int}")]
+    [Authorize(Roles = "Administrator,Staff,Tenant")]
     public async Task<ActionResult<TenantLedgerDto>> GetTenantLedger(int tenantId)
     {
+        if (User.IsTenantUser() && tenantId != User.GetTenantId())
+        {
+            return Forbid();
+        }
+
         var tenant = await dbContext.Tenants
             .AsNoTracking()
             .Include(item => item.Property)
@@ -69,6 +77,7 @@ public class RentRecordsController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpGet("property/{propertyId:int}")]
+    [Authorize(Roles = "Administrator,Staff")]
     public async Task<ActionResult<PropertyLedgerDto>> GetPropertyLedger(int propertyId)
     {
         var property = await dbContext.Properties

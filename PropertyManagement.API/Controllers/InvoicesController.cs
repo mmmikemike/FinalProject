@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
 using PropertyManagement.API.Data;
 using PropertyManagement.API.Models;
+using PropertyManagement.API.Security;
 
 namespace PropertyManagement.API.Controllers;
 
@@ -11,6 +13,7 @@ namespace PropertyManagement.API.Controllers;
 public class InvoicesController(AppDbContext dbContext) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Roles = "Administrator,Staff,Contractor,Tenant")]
     public async Task<ActionResult<IEnumerable<InvoiceDto>>> GetInvoices([FromQuery] string? status = null, [FromQuery] int? projectId = null, [FromQuery] int? scheduleId = null, [FromQuery] int? tenantId = null)
     {
         var query = dbContext.Invoices
@@ -43,6 +46,22 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
             query = query.Where(invoice => invoice.Schedule != null && invoice.Schedule.TenantId == tenantId.Value);
         }
 
+        if (User.IsTenantUser())
+        {
+            var currentTenantId = User.GetTenantId();
+            if (!currentTenantId.HasValue)
+            {
+                return Forbid();
+            }
+
+            query = query.Where(invoice => invoice.Schedule != null && invoice.Schedule.TenantId == currentTenantId.Value);
+        }
+
+        if (User.IsContractorUser())
+        {
+            query = query.Where(invoice => invoice.ProjectId.HasValue);
+        }
+
         var invoices = await query
             .OrderByDescending(invoice => invoice.InvoiceDate)
             .ToListAsync();
@@ -51,6 +70,7 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [Authorize(Roles = "Administrator,Staff,Contractor,Tenant")]
     public async Task<ActionResult<InvoiceDto>> GetInvoice(int id)
     {
         var invoice = await dbContext.Invoices
@@ -63,12 +83,33 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
             .Include(item => item.LineItems)
             .FirstOrDefaultAsync(item => item.InvoiceId == id);
 
-        return invoice is null ? NotFound() : Ok(MapInvoice(invoice));
+        if (invoice is null)
+        {
+            return NotFound();
+        }
+
+        if (User.IsTenantUser() && invoice.Schedule?.TenantId != User.GetTenantId())
+        {
+            return Forbid();
+        }
+
+        if (User.IsContractorUser() && !invoice.ProjectId.HasValue)
+        {
+            return Forbid();
+        }
+
+        return Ok(MapInvoice(invoice));
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrator,Contractor")]
     public async Task<ActionResult<InvoiceDto>> CreateInvoice([FromBody] InvoiceUpsertRequest request)
     {
+        if (User.IsContractorUser() && (!request.ProjectId.HasValue || request.ScheduleId.HasValue))
+        {
+            return Forbid();
+        }
+
         var validationResult = await ValidateReferencesAsync(request);
         if (validationResult is not null)
         {
@@ -94,12 +135,18 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Administrator,Contractor")]
     public async Task<ActionResult<InvoiceDto>> UpdateInvoice(int id, [FromBody] InvoiceUpsertRequest request)
     {
         var invoice = await dbContext.Invoices.FindAsync(id);
         if (invoice is null)
         {
             return NotFound();
+        }
+
+        if (User.IsContractorUser() && (!invoice.ProjectId.HasValue || !request.ProjectId.HasValue || request.ScheduleId.HasValue))
+        {
+            return Forbid();
         }
 
         var validationResult = await ValidateReferencesAsync(request);
@@ -126,12 +173,18 @@ public class InvoicesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Administrator,Contractor")]
     public async Task<IActionResult> DeleteInvoice(int id)
     {
         var invoice = await dbContext.Invoices.FindAsync(id);
         if (invoice is null)
         {
             return NotFound();
+        }
+
+        if (User.IsContractorUser() && !invoice.ProjectId.HasValue)
+        {
+            return Forbid();
         }
 
         dbContext.Invoices.Remove(invoice);

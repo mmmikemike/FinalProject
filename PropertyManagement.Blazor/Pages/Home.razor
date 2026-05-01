@@ -238,6 +238,13 @@ else
                         <p>Review tenant ledgers and property-level financial rollups.</p>
                     </a>
                 }
+                @if (user.CanViewRentCollection)
+                {
+                    <a class="shortcut-card" href="rent-collection">
+                        <strong>Rent collection</strong>
+                        <p>Work the unpaid rent queue, log follow-up, apply fees, and record payments.</p>
+                    </a>
+                }
                 @if (user.CanViewMaintenance)
                 {
                     <a class="shortcut-card" href="maintenance-projects">

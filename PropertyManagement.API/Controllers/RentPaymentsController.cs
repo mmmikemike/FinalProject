@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
 using PropertyManagement.API.Data;
 using PropertyManagement.API.Models;
+using PropertyManagement.API.Security;
 
 namespace PropertyManagement.API.Controllers;
 
@@ -11,6 +13,7 @@ namespace PropertyManagement.API.Controllers;
 public class RentPaymentsController(AppDbContext context) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Roles = "Administrator,Staff,Tenant")]
     public async Task<ActionResult<IEnumerable<RentPaymentDto>>> GetRentPayments([FromQuery] int? tenantId = null, [FromQuery] int? scheduleId = null)
     {
         var query = context.RentPayments
@@ -22,6 +25,17 @@ public class RentPaymentsController(AppDbContext context) : ControllerBase
         if (tenantId.HasValue)
         {
             query = query.Where(payment => payment.RentSchedule != null && payment.RentSchedule.TenantId == tenantId.Value);
+        }
+
+        if (User.IsTenantUser())
+        {
+            var currentTenantId = User.GetTenantId();
+            if (!currentTenantId.HasValue)
+            {
+                return Forbid();
+            }
+
+            query = query.Where(payment => payment.RentSchedule != null && payment.RentSchedule.TenantId == currentTenantId.Value);
         }
 
         if (scheduleId.HasValue)
@@ -37,6 +51,7 @@ public class RentPaymentsController(AppDbContext context) : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [Authorize(Roles = "Administrator,Staff,Tenant")]
     public async Task<ActionResult<RentPaymentDto>> GetRentPayment(int id)
     {
         var payment = await context.RentPayments
@@ -45,10 +60,21 @@ public class RentPaymentsController(AppDbContext context) : ControllerBase
             .ThenInclude(schedule => schedule!.Tenant)
             .FirstOrDefaultAsync(item => item.PaymentId == id);
 
-        return payment is null ? NotFound() : Ok(MapPayment(payment));
+        if (payment is null)
+        {
+            return NotFound();
+        }
+
+        if (User.IsTenantUser() && payment.RentSchedule?.TenantId != User.GetTenantId())
+        {
+            return Forbid();
+        }
+
+        return Ok(MapPayment(payment));
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<RentPaymentDto>> PostRentPayment(RentPaymentUpsertRequest request)
     {
         var scheduleExists = await context.RentSchedules.AnyAsync(schedule => schedule.ScheduleId == request.ScheduleId);
@@ -69,11 +95,13 @@ public class RentPaymentsController(AppDbContext context) : ControllerBase
 
         context.RentPayments.Add(payment);
         await context.SaveChangesAsync();
+        await RefreshScheduleStatusAsync(request.ScheduleId);
 
         return CreatedAtAction(nameof(GetRentPayment), new { id = payment.PaymentId }, await MapPaymentAsync(payment.PaymentId));
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<RentPaymentDto>> PutRentPayment(int id, RentPaymentUpsertRequest request)
     {
         var payment = await context.RentPayments.FirstOrDefaultAsync(existingPayment => existingPayment.PaymentId == id);
@@ -96,11 +124,13 @@ public class RentPaymentsController(AppDbContext context) : ControllerBase
         payment.TransactionRef = string.IsNullOrWhiteSpace(request.TransactionRef) ? null : request.TransactionRef.Trim();
 
         await context.SaveChangesAsync();
+        await RefreshScheduleStatusAsync(request.ScheduleId);
 
         return Ok(await MapPaymentAsync(id));
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Administrator")]
     public async Task<IActionResult> DeleteRentPayment(int id)
     {
         var payment = await context.RentPayments.FindAsync(id);
@@ -111,8 +141,30 @@ public class RentPaymentsController(AppDbContext context) : ControllerBase
 
         context.RentPayments.Remove(payment);
         await context.SaveChangesAsync();
+        await RefreshScheduleStatusAsync(payment.ScheduleId);
 
         return NoContent();
+    }
+
+    private async Task RefreshScheduleStatusAsync(int scheduleId)
+    {
+        var schedule = await context.RentSchedules
+            .Include(item => item.RentPayments)
+            .FirstOrDefaultAsync(item => item.ScheduleId == scheduleId);
+
+        if (schedule is null)
+        {
+            return;
+        }
+
+        var totalDue = schedule.BaseRent + schedule.LateFeeAccrued;
+        var totalPaid = schedule.RentPayments.Sum(payment => payment.AmountPaid);
+
+        schedule.Status = totalPaid <= 0
+            ? schedule.Status == "Late" ? "Late" : "Unpaid"
+            : totalPaid >= totalDue ? "Paid" : "Partial";
+
+        await context.SaveChangesAsync();
     }
 
     private async Task<RentPaymentDto> MapPaymentAsync(int id)

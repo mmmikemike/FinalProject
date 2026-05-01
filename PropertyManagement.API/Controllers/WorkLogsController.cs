@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
@@ -8,6 +9,7 @@ namespace PropertyManagement.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "Administrator,Staff,Contractor")]
 public class WorkLogsController(AppDbContext dbContext) : ControllerBase
 {
     [HttpGet]
@@ -42,6 +44,7 @@ public class WorkLogsController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrator,Contractor")]
     public async Task<ActionResult<WorkLogDto>> CreateWorkLog([FromBody] WorkLogUpsertRequest request)
     {
         if (!await dbContext.MaintenanceProjects.AnyAsync(project => project.ProjectId == request.ProjectId))
@@ -74,6 +77,7 @@ public class WorkLogsController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Administrator,Contractor")]
     public async Task<ActionResult<WorkLogDto>> UpdateWorkLog(int id, [FromBody] WorkLogUpsertRequest request)
     {
         var log = await dbContext.WorkLogs.FindAsync(id);
@@ -108,6 +112,7 @@ public class WorkLogsController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Administrator,Contractor")]
     public async Task<IActionResult> DeleteWorkLog(int id)
     {
         var log = await dbContext.WorkLogs.FindAsync(id);

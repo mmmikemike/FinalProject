@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
@@ -8,6 +9,7 @@ namespace PropertyManagement.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "Administrator,Staff")]
 public class EvictionCasesController(AppDbContext dbContext) : ControllerBase
 {
     [HttpGet]
@@ -49,6 +51,7 @@ public class EvictionCasesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<EvictionCaseDto>> CreateCase([FromBody] EvictionCaseUpsertRequest request)
     {
         var tenantExists = await dbContext.Tenants.AnyAsync(tenant => tenant.TenantId == request.TenantId);
@@ -68,6 +71,7 @@ public class EvictionCasesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<EvictionCaseDto>> UpdateCase(int id, [FromBody] EvictionCaseUpsertRequest request)
     {
         var evictionCase = await dbContext.EvictionCases.FirstOrDefaultAsync(item => item.CaseId == id);
@@ -90,6 +94,7 @@ public class EvictionCasesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Administrator")]
     public async Task<IActionResult> DeleteCase(int id)
     {
         var evictionCase = await dbContext.EvictionCases.FindAsync(id);

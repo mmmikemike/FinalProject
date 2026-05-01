@@ -175,6 +175,22 @@ public static class DatabaseInitializer
                     );
                 END;
 
+                IF OBJECT_ID(N'dbo.CommunicationLogs', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.CommunicationLogs (
+                        CommunicationID INT IDENTITY(1,1) PRIMARY KEY,
+                        TenantID INT NOT NULL,
+                        ScheduleID INT NULL,
+                        LoggedAt DATETIME NOT NULL CONSTRAINT DF_CommunicationLogs_LoggedAt DEFAULT(GETDATE()),
+                        Channel NVARCHAR(50) NOT NULL,
+                        Subject NVARCHAR(150) NOT NULL,
+                        Message NVARCHAR(MAX) NOT NULL,
+                        CreatedBy NVARCHAR(100) NOT NULL CONSTRAINT DF_CommunicationLogs_CreatedBy DEFAULT('Admin'),
+                        CONSTRAINT FK_CommunicationLogs_Tenants FOREIGN KEY (TenantID) REFERENCES dbo.Tenants(TenantID) ON DELETE CASCADE,
+                        CONSTRAINT FK_CommunicationLogs_RentSchedules FOREIGN KEY (ScheduleID) REFERENCES dbo.RentSchedules(ScheduleID) ON DELETE SET NULL
+                    );
+                END;
+
                 IF COL_LENGTH('dbo.Invoices', 'ProjectID') IS NULL
                 BEGIN
                     ALTER TABLE dbo.Invoices ADD ProjectID INT NULL;
@@ -342,6 +358,13 @@ public static class DatabaseInitializer
                     INSERT INTO dbo.EvictionCases (TenantID, OpenedDate, Reason, Status, CurrentStep, Notes, LateRentNoticeComplete)
                     VALUES
                         (2, '2026-04-05T00:00:00', 'Late Rent', 'Open', 'Late Rent Notice', 'Initial notice preparation for unpaid April rent.', 1);
+                END;
+
+                IF NOT EXISTS (SELECT 1 FROM dbo.CommunicationLogs)
+                BEGIN
+                    INSERT INTO dbo.CommunicationLogs (TenantID, ScheduleID, LoggedAt, Channel, Subject, Message, CreatedBy)
+                    VALUES
+                        (2, 2, '2026-04-02T09:00:00', 'Text', 'Day 1 rent reminder', 'Friendly reminder that rent is currently due. Please contact us if you have already sent payment.', 'Admin');
                 END;
                 """);
         }

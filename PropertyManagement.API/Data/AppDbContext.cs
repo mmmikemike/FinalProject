@@ -14,6 +14,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceLineItem> InvoiceLineItems => Set<InvoiceLineItem>();
     public DbSet<EvictionCase> EvictionCases => Set<EvictionCase>();
+    public DbSet<CommunicationLog> CommunicationLogs => Set<CommunicationLog>();
     public DbSet<PropertyApplication> PropertyApplications => Set<PropertyApplication>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -29,6 +30,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Invoice>().ToTable("Invoices");
         modelBuilder.Entity<InvoiceLineItem>().ToTable("InvoiceLineItems");
         modelBuilder.Entity<EvictionCase>().ToTable("EvictionCases");
+        modelBuilder.Entity<CommunicationLog>().ToTable("CommunicationLogs");
         modelBuilder.Entity<PropertyApplication>().ToTable("PropertyApplications");
 
         modelBuilder.Entity<PropertyApplication>()
@@ -151,6 +153,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Property(item => item.CurrentStep)
             .HasMaxLength(100);
 
+        modelBuilder.Entity<CommunicationLog>()
+            .Property(item => item.Channel)
+            .HasMaxLength(50);
+
+        modelBuilder.Entity<CommunicationLog>()
+            .Property(item => item.Subject)
+            .HasMaxLength(150);
+
+        modelBuilder.Entity<CommunicationLog>()
+            .Property(item => item.CreatedBy)
+            .HasMaxLength(100);
+
         modelBuilder.Entity<PropertyApplication>()
             .Property(application => application.ApplicantFirstName)
             .HasMaxLength(50);
@@ -241,6 +255,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasForeignKey(item => item.TenantId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<CommunicationLog>()
+            .HasOne(item => item.Tenant)
+            .WithMany()
+            .HasForeignKey(item => item.TenantId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<CommunicationLog>()
+            .HasOne(item => item.Schedule)
+            .WithMany()
+            .HasForeignKey(item => item.ScheduleId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         modelBuilder.Entity<PropertyApplication>()
             .HasOne(application => application.Property)
             .WithMany(property => property.Applications)
@@ -312,6 +338,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 CurrentStep = "Late Rent Notice",
                 Notes = "Initial notice preparation for unpaid April rent.",
                 LateRentNoticeComplete = true
+            });
+
+        modelBuilder.Entity<CommunicationLog>().HasData(
+            new CommunicationLog
+            {
+                CommunicationId = 1,
+                TenantId = 2,
+                ScheduleId = 2,
+                LoggedAt = new DateTime(2026, 4, 2, 9, 0, 0, DateTimeKind.Utc),
+                Channel = "Text",
+                Subject = "Day 1 rent reminder",
+                Message = "Friendly reminder that rent is currently due. Please contact us if you have already sent payment.",
+                CreatedBy = "Admin"
             });
     }
 }

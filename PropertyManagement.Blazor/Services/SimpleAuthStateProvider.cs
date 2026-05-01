@@ -1,27 +1,18 @@
 using System.Security.Claims;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.JSInterop;
+using PropertyManagement.Blazor.Models;
 
 namespace PropertyManagement.Blazor.Services;
 
-public sealed class SimpleAuthStateProvider(IJSRuntime jsRuntime) : AuthenticationStateProvider
+public sealed class SimpleAuthStateProvider(IJSRuntime jsRuntime, HttpClient httpClient) : AuthenticationStateProvider
 {
     private const string StorageKey = "pm.admin.user";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private static readonly AuthenticationState AnonymousState = new(new ClaimsPrincipal(new ClaimsIdentity()));
-    private static readonly IReadOnlyDictionary<string, LoginAccount> Accounts = new Dictionary<string, LoginAccount>(StringComparer.Ordinal)
-    {
-        ["ADMIN"] = new("ADMIN", "ADMIN", AccessControlService.AdministratorRole, null, "Admin"),
-        ["STAFF"] = new("STAFF", "STAFF", AccessControlService.StaffRole, null, "Staff"),
-        ["CONTRACTOR"] = new("CONTRACTOR", "CONTRACTOR", AccessControlService.ContractorRole, null, "Contractor"),
-        ["TENANT1"] = new("TENANT1", "TENANT1", AccessControlService.TenantRole, 1, "John Doe"),
-        ["TENANT2"] = new("TENANT2", "TENANT2", AccessControlService.TenantRole, 2, "Jane Smith"),
-        ["TENANT3"] = new("TENANT3", "TENANT3", AccessControlService.TenantRole, 3, "Mike Jones"),
-        ["TENANT4"] = new("TENANT4", "TENANT4", AccessControlService.TenantRole, 4, "Sarah Wilson"),
-        ["TENANT5"] = new("TENANT5", "TENANT5", AccessControlService.TenantRole, 5, "Alex Brown"),
-        ["TENANT6"] = new("TENANT6", "TENANT6", AccessControlService.TenantRole, 6, "Chris Davis")
-     };
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
@@ -34,7 +25,15 @@ public sealed class SimpleAuthStateProvider(IJSRuntime jsRuntime) : Authenticati
                 return AnonymousState;
             }
 
-            return new AuthenticationState(CreatePrincipal(ParseStoredUser(storedUserJson)));
+            var storedUser = ParseStoredUser(storedUserJson);
+            if (string.IsNullOrWhiteSpace(storedUser.AccessToken) || storedUser.ExpiresAt <= DateTime.UtcNow)
+            {
+                await ClearStoredSessionAsync();
+                return AnonymousState;
+            }
+
+            ApplyBearerToken(storedUser.AccessToken);
+            return new AuthenticationState(CreatePrincipal(storedUser));
         }
         catch (JSException)
         {
@@ -48,15 +47,26 @@ public sealed class SimpleAuthStateProvider(IJSRuntime jsRuntime) : Authenticati
 
     public async Task<bool> SignInAsync(string? username, string? password)
     {
-        var normalizedUser = username?.Trim().ToUpperInvariant() ?? string.Empty;
-        if (!Accounts.TryGetValue(normalizedUser, out var account) ||
-            !string.Equals(password, account.Password, StringComparison.Ordinal))
+        var response = await httpClient.PostAsJsonAsync("api/auth/login", new LoginRequestModel
+        {
+            UserName = username?.Trim() ?? string.Empty,
+            Password = password ?? string.Empty
+        });
+
+        if (!response.IsSuccessStatusCode)
         {
             return false;
         }
 
-        var storedUser = new StoredUser(account.UserName, account.Role, account.TenantId, account.DisplayName);
+        var login = await response.Content.ReadFromJsonAsync<LoginResponseModel>(SerializerOptions);
+        if (login is null || string.IsNullOrWhiteSpace(login.AccessToken))
+        {
+            return false;
+        }
+
+        var storedUser = new StoredUser(login.UserName, login.Role, login.TenantId, login.DisplayName, login.AccessToken, login.ExpiresAt);
         await jsRuntime.InvokeVoidAsync("pmAuth.setUser", StorageKey, JsonSerializer.Serialize(storedUser, SerializerOptions));
+        ApplyBearerToken(storedUser.AccessToken);
 
         NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(CreatePrincipal(storedUser))));
         return true;
@@ -64,8 +74,20 @@ public sealed class SimpleAuthStateProvider(IJSRuntime jsRuntime) : Authenticati
 
     public async Task SignOutAsync()
     {
-        await jsRuntime.InvokeVoidAsync("pmAuth.clearUser", StorageKey);
+        await ClearStoredSessionAsync();
         NotifyAuthenticationStateChanged(Task.FromResult(AnonymousState));
+    }
+
+    public async Task<string?> GetAccessTokenAsync()
+    {
+        var storedUserJson = await jsRuntime.InvokeAsync<string?>("pmAuth.getUser", StorageKey);
+        if (string.IsNullOrWhiteSpace(storedUserJson))
+        {
+            return null;
+        }
+
+        var storedUser = ParseStoredUser(storedUserJson);
+        return storedUser.ExpiresAt > DateTime.UtcNow ? storedUser.AccessToken : null;
     }
 
     private static ClaimsPrincipal CreatePrincipal(StoredUser user)
@@ -99,15 +121,21 @@ public sealed class SimpleAuthStateProvider(IJSRuntime jsRuntime) : Authenticati
         }
         catch (JsonException)
         {
-            if (Accounts.TryGetValue(storedUserJson.Trim().ToUpperInvariant(), out var account))
-            {
-                return new StoredUser(account.UserName, account.Role, account.TenantId, account.DisplayName);
-            }
         }
 
-        return new StoredUser("ADMIN", AccessControlService.AdministratorRole, null, "Admin");
+        return new StoredUser(string.Empty, string.Empty, null, string.Empty, string.Empty, DateTime.MinValue);
     }
 
-    private sealed record LoginAccount(string UserName, string Password, string Role, int? TenantId, string DisplayName);
-    private sealed record StoredUser(string UserName, string Role, int? TenantId, string DisplayName);
+    private async Task ClearStoredSessionAsync()
+    {
+        httpClient.DefaultRequestHeaders.Authorization = null;
+        await jsRuntime.InvokeVoidAsync("pmAuth.clearUser", StorageKey);
+    }
+
+    private void ApplyBearerToken(string token)
+    {
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    }
+
+    private sealed record StoredUser(string UserName, string Role, int? TenantId, string DisplayName, string AccessToken, DateTime ExpiresAt);
 }

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
@@ -8,6 +9,7 @@ namespace PropertyManagement.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "Administrator,Staff,Contractor")]
 public class MaintenanceProjectsController(AppDbContext dbContext) : ControllerBase
 {
     [HttpGet]
@@ -50,6 +52,7 @@ public class MaintenanceProjectsController(AppDbContext dbContext) : ControllerB
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrator,Contractor")]
     public async Task<ActionResult<MaintenanceProjectDto>> CreateMaintenanceProject([FromBody] MaintenanceProjectUpsertRequest request)
     {
         if (!await dbContext.Properties.AnyAsync(property => property.PropertyId == request.PropertyId))
@@ -74,6 +77,7 @@ public class MaintenanceProjectsController(AppDbContext dbContext) : ControllerB
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Administrator,Contractor")]
     public async Task<ActionResult<MaintenanceProjectDto>> UpdateMaintenanceProject(int id, [FromBody] MaintenanceProjectUpsertRequest request)
     {
         var project = await dbContext.MaintenanceProjects.FindAsync(id);
@@ -100,6 +104,7 @@ public class MaintenanceProjectsController(AppDbContext dbContext) : ControllerB
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Administrator,Contractor")]
     public async Task<IActionResult> DeleteMaintenanceProject(int id)
     {
         var project = await dbContext.MaintenanceProjects.FindAsync(id);

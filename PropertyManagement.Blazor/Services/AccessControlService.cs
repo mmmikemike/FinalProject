@@ -39,6 +39,9 @@ public sealed record UserAccessProfile(string UserName, string Role, int? Tenant
     public bool CanViewRentPayments => IsAdmin || IsStaff || IsTenant;
     public bool CanEditRentPayments => IsAdmin;
 
+    public bool CanViewRentCollection => IsAdmin || IsStaff;
+    public bool CanEditRentCollection => IsAdmin;
+
     public bool CanViewRentRecords => IsAdmin || IsStaff || IsTenant;
     public bool CanViewPropertyLedgers => IsAdmin || IsStaff;
 

@@ -1,9 +1,11 @@
 using System.Globalization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.API.Contracts;
 using PropertyManagement.API.Data;
 using PropertyManagement.API.Models;
+using PropertyManagement.API.Security;
 
 namespace PropertyManagement.API.Controllers;
 
@@ -12,6 +14,7 @@ namespace PropertyManagement.API.Controllers;
 public class RentSchedulesController(AppDbContext context) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Roles = "Administrator,Staff,Tenant")]
     public async Task<ActionResult<IEnumerable<RentScheduleDto>>> GetRentSchedules(
         [FromQuery] string? status = null,
         [FromQuery] string? month = null,
@@ -34,6 +37,17 @@ public class RentSchedulesController(AppDbContext context) : ControllerBase
             query = query.Where(schedule => schedule.TenantId == tenantId.Value);
         }
 
+        if (User.IsTenantUser())
+        {
+            var currentTenantId = User.GetTenantId();
+            if (!currentTenantId.HasValue)
+            {
+                return Forbid();
+            }
+
+            query = query.Where(schedule => schedule.TenantId == currentTenantId.Value);
+        }
+
         if (propertyId.HasValue)
         {
             query = query.Where(schedule => schedule.Tenant != null && schedule.Tenant.PropertyId == propertyId.Value);
@@ -54,6 +68,7 @@ public class RentSchedulesController(AppDbContext context) : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [Authorize(Roles = "Administrator,Staff,Tenant")]
     public async Task<ActionResult<RentScheduleDto>> GetRentSchedule(int id)
     {
         var schedule = await context.RentSchedules
@@ -62,10 +77,21 @@ public class RentSchedulesController(AppDbContext context) : ControllerBase
             .Include(schedule => schedule.RentPayments)
             .FirstOrDefaultAsync(schedule => schedule.ScheduleId == id);
 
-        return schedule is null ? NotFound() : Ok(MapSchedule(schedule));
+        if (schedule is null)
+        {
+            return NotFound();
+        }
+
+        if (User.IsTenantUser() && schedule.TenantId != User.GetTenantId())
+        {
+            return Forbid();
+        }
+
+        return Ok(MapSchedule(schedule));
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<RentScheduleDto>> PostRentSchedule(RentScheduleUpsertRequest request)
     {
         var tenantExists = await context.Tenants.AnyAsync(tenant => tenant.TenantId == request.TenantId);
@@ -92,6 +118,7 @@ public class RentSchedulesController(AppDbContext context) : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<RentScheduleDto>> PutRentSchedule(int id, RentScheduleUpsertRequest request)
     {
         var schedule = await context.RentSchedules.FirstOrDefaultAsync(existingSchedule => existingSchedule.ScheduleId == id);
@@ -119,7 +146,41 @@ public class RentSchedulesController(AppDbContext context) : ControllerBase
         return Ok(await MapScheduleAsync(id));
     }
 
+    [HttpPost("{id:int}/apply-late-fee")]
+    [Authorize(Roles = "Administrator")]
+    public async Task<ActionResult<RentScheduleDto>> ApplyLateFee(int id, [FromBody] ApplyLateFeeRequest request)
+    {
+        var schedule = await context.RentSchedules
+            .Include(item => item.Tenant)
+            .FirstOrDefaultAsync(existingSchedule => existingSchedule.ScheduleId == id);
+
+        if (schedule is null)
+        {
+            return NotFound();
+        }
+
+        schedule.LateFeeAccrued += request.FeeAmount;
+        schedule.Status = schedule.Status == "Paid" ? "Partial" : "Late";
+        schedule.ReminderCount += 1;
+
+        context.CommunicationLogs.Add(new CommunicationLog
+        {
+            TenantId = schedule.TenantId,
+            ScheduleId = schedule.ScheduleId,
+            LoggedAt = DateTime.UtcNow,
+            Channel = "System",
+            Subject = "Late fee applied",
+            Message = $"A late fee of {request.FeeAmount:C} was applied to rent due {schedule.DueDate:yyyy-MM-dd}.",
+            CreatedBy = string.IsNullOrWhiteSpace(request.CreatedBy) ? "Admin" : request.CreatedBy.Trim()
+        });
+
+        await context.SaveChangesAsync();
+
+        return Ok(await MapScheduleAsync(id));
+    }
+
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Administrator")]
     public async Task<IActionResult> DeleteRentSchedule(int id)
     {
         var schedule = await context.RentSchedules.FindAsync(id);
