@@ -17,6 +17,13 @@
 {
     <div class="alert alert-danger" role="alert">@errorMessage</div>
 }
+@if (!string.IsNullOrWhiteSpace(successMessage))
+{
+    <div class="alert alert-success alert-dismissible" role="status">
+        @successMessage
+        <button type="button" class="btn-close" aria-label="Close" @onclick="ClearSuccessMessage"></button>
+    </div>
+}
 
 <div class="dashboard-grid">
     <section class="stat-card compact-card">
@@ -203,7 +210,7 @@
                             <th>Property</th>
                             <th>Status</th>
                             <th>Amount</th>
-                            @if (user.CanEditInvoices)
+                            @if (ShowActionsColumn)
                             {
                                 <th class="text-end">Actions</th>
                             }
@@ -225,11 +232,18 @@
                                 <td>@invoice.PropertyName</td>
                                 <td><span class="@invoice.StatusCssClass">@invoice.Status</span></td>
                                 <td>@invoice.TotalAmount.ToString("C")</td>
-                                @if (user.CanEditInvoices)
+                                @if (ShowActionsColumn)
                                 {
                                     <td class="action-cell">
-                                        <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEdit(invoice)">Edit</button>
-                                        <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteInvoiceAsync(invoice.InvoiceId)">Delete</button>
+                                        @if (CanSendReminder(invoice))
+                                        {
+                                            <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => SendInvoiceReminderAsync(invoice)">Reminder</button>
+                                        }
+                                        @if (user.CanEditInvoices)
+                                        {
+                                            <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => BeginEdit(invoice)">Edit</button>
+                                            <button class="btn btn-sm btn-danger" type="button" @onclick="() => DeleteInvoiceAsync(invoice.InvoiceId)">Delete</button>
+                                        }
                                     </td>
                                 }
                             </tr>
@@ -254,7 +268,9 @@
     private int? editingInvoiceId;
     private string selectedStatus = string.Empty;
     private string? errorMessage;
+    private string? successMessage;
     private UserAccessProfile user = UserAccessProfile.Anonymous;
+    private bool ShowActionsColumn => user.CanEditInvoices || invoices.Any(CanSendReminder);
 
     protected override async Task OnInitializedAsync()
     {
@@ -266,6 +282,7 @@
     {
         isLoading = true;
         errorMessage = null;
+        successMessage = null;
 
         try
         {
@@ -312,6 +329,7 @@
         PrepareInvoiceTotal();
         isSaving = true;
         errorMessage = null;
+        successMessage = null;
 
         try
         {
@@ -342,6 +360,7 @@
         editingInvoiceId = invoice.InvoiceId;
         form = InvoiceFormModel.FromInvoice(invoice);
         errorMessage = null;
+        successMessage = null;
     }
 
     private async Task DeleteInvoiceAsync(int invoiceId)
@@ -367,6 +386,58 @@
         form = new InvoiceFormModel();
         editingInvoiceId = null;
         errorMessage = null;
+        successMessage = null;
+    }
+
+    private bool CanSendReminder(InvoiceModel invoice)
+    {
+        return user.IsAdmin &&
+            invoice.TenantId.HasValue &&
+            invoice.Status is "Sent" or "Overdue";
+    }
+
+    private async Task SendInvoiceReminderAsync(InvoiceModel invoice)
+    {
+        if (!CanSendReminder(invoice) || !invoice.TenantId.HasValue)
+        {
+            return;
+        }
+
+        try
+        {
+            errorMessage = null;
+            successMessage = null;
+
+            await ApiClient.CreateCommunicationLogAsync(new CommunicationLogFormModel
+            {
+                TenantId = invoice.TenantId.Value,
+                ScheduleId = invoice.ScheduleId,
+                LoggedAt = DateTime.Now,
+                Channel = "Notice",
+                Subject = $"Invoice #{invoice.InvoiceId} reminder",
+                Message = $"Reminder: invoice #{invoice.InvoiceId} for {invoice.ReferenceName} has a balance of {invoice.TotalAmount:C} and is currently {invoice.Status}.",
+                CreatedBy = user.UserName
+            });
+
+            successMessage = $"Reminder logged for {invoice.CustomerName}.";
+            _ = ClearSuccessMessageAfterDelayAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void ClearSuccessMessage()
+    {
+        successMessage = null;
+    }
+
+    private async Task ClearSuccessMessageAfterDelayAsync()
+    {
+        await Task.Delay(TimeSpan.FromSeconds(5));
+        successMessage = null;
+        await InvokeAsync(StateHasChanged);
     }
 
     private void AddLineItem()

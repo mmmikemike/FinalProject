@@ -97,8 +97,8 @@
                                 <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => SelectScheduleAsync(schedule)">Open</button>
                                 @if (user.CanEditRentCollection)
                                 {
-                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick='() => StartReminder(schedule, "Day 1 reminder")'>Reminder</button>
-                                    <button class="btn btn-sm btn-outline-primary" type="button" @onclick='() => StartReminder(schedule, "Final notice")'>Final notice</button>
+                                    <button class="btn btn-sm btn-warning" type="button" @onclick='() => StartReminder(schedule, "Day 1 reminder")'>Reminder</button>
+                                    <button class="btn btn-sm btn-danger type="button" @onclick='() => StartReminder(schedule, "Final notice")'>Final notice</button>
                                 }
                             </td>
                         </tr>
